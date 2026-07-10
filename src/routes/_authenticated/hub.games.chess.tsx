@@ -4,7 +4,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { ArrowLeft, Trophy, Users, Bot, Puzzle, Lightbulb, Eye, SkipForward, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
 import { useState, useEffect, useRef } from "react";
-import { getGameBySlug } from "@/lib/games.functions";
+import { getGameBySlug, type Game } from "@/lib/games.functions";
 import { getGameLeaderboard, submitScore } from "@/lib/scores.functions";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -15,8 +15,11 @@ import { ChessBoard } from "@/lib/chess/ChessBoard";
 import { GameInfo } from "@/lib/chess/GameInfo";
 import { PuzzleProvider, usePuzzle } from "@/lib/chess/PuzzleContext";
 import { PUZZLES } from "@/lib/chess/puzzles";
+import { LOCAL_GAMES } from "@/lib/local-games";
 
 // ── Route ─────────────────────────────────────────────────────────
+
+const CHESS_LOCAL: Game = LOCAL_GAMES.find(g => g.slug === "chess")!.data;
 
 const gameQuery = queryOptions({
   queryKey: ["game", "chess"],
@@ -27,8 +30,8 @@ const gameQuery = queryOptions({
 export const Route = createFileRoute("/_authenticated/hub/games/chess")({
   loader: async ({ context }) => {
     const game = await context.queryClient.ensureQueryData(gameQuery);
-    if (!game) throw notFound();
-    return { game };
+    // Fall back to local definition if Supabase doesn't have the row yet
+    return { game: game ?? CHESS_LOCAL };
   },
   component: ChessPage,
   notFoundComponent: () => (
