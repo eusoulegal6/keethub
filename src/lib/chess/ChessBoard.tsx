@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo, useEffect, memo } from "react";
+import { useState, useCallback, useMemo, useEffect, memo, useRef } from "react";
 import { Chess } from "chess.js";
 import type { Square } from "chess.js";
 import { ChessPiece } from "./chessPieces";

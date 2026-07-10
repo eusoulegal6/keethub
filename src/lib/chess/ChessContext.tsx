@@ -1,8 +1,7 @@
 import { createContext, useContext, useState, useCallback, useMemo, useRef, useEffect } from "react";
 import { Chess } from "chess.js";
 import type { GameState, GameMode, ChessMove, GameStatus, AIConfig, Side, ChessContextType } from "./types";
-
-const PIECE_VALUES: Record<string, number> = { q: 9, r: 5, b: 3.3, n: 3.2, p: 1 };
+import { stockfishEngine } from "./StockfishEngine";
 
 function getGameStatus(game: Chess): GameStatus {
   if (game.isCheckmate()) return "checkmate";
@@ -28,142 +27,9 @@ function buildGameState(game: Chess, mode: GameMode, lastMove?: { from: string; 
   };
 }
 
-// ── Heuristic AI ──────────────────────────────────────────────────
-// Scores a position from the AI's perspective (higher = better for AI)
-
-function evaluatePosition(game: Chess, aiColor: "w" | "b"): number {
-  const fen = game.fen();
-  let score = 0;
-
-  // Material count
-  for (const ch of fen.split(" ")[0]) {
-    const upper = ch.toUpperCase();
-    if (PIECE_VALUES[upper]) {
-      score += (ch === upper ? 1 : -1) * PIECE_VALUES[upper];
-    }
-  }
-
-  // Mobility (number of legal moves)
-  const moves = game.moves({ verbose: true });
-  score += moves.length * 0.05;
-
-  // Center control from squares
-  for (const m of moves) {
-    if (["d4", "d5", "e4", "e5"].includes(m.to)) score += 0.1;
-  }
-
-  // Pawn structure bonus for d4/e4 presence
-  try {
-    if (game.get("d4")?.color === "w" && game.get("d4")?.type === "p") score += 0.3;
-    if (game.get("e4")?.color === "w" && game.get("e4")?.type === "p") score += 0.3;
-    if (game.get("d5")?.color === "b" && game.get("d5")?.type === "p") score -= 0.3;
-    if (game.get("e5")?.color === "b" && game.get("e5")?.type === "p") score -= 0.3;
-  } catch {}
-
-  // King safety (basic)
-  try {
-    const wkFile = "abcdefgh".indexOf(fen.match(/K/) ? "e" : "a");
-    if (fen.includes("K") && (wkFile === 2 || wkFile === 3 || wkFile === 4)) score += 0.2;
-  } catch {}
-
-  return aiColor === "w" ? score : -score;
-}
-
-function scoreMove(
-  game: Chess,
-  from: string,
-  to: string,
-  aiColor: "w" | "b",
-): number {
-  let s = 0;
-  const piece = game.get(from);
-  const captured = game.get(to);
-
-  // Capture bonus
-  if (captured) {
-    s += (PIECE_VALUES[captured.type] || 0) * 10;
-    // Prefer capturing with lower-value pieces
-    if (piece) s += (PIECE_VALUES[piece.type] || 0) * 0.5;
-  }
-
-  // Center bonus
-  if (["d4", "d5", "e4", "e5"].includes(to)) s += 0.5;
-  if (["c3", "c6", "f3", "f6", "d3", "d6", "e3", "e6"].includes(to)) s += 0.3;
-
-  // Check bonus
-  game.move(from, to);
-  if (game.isCheck()) s += 3;
-  if (game.isCheckmate()) s += 100;
-  game.undo();
-
-  // Development (move pieces off the back rank early)
-  if (piece && ["n", "b"].includes(piece.type) && from[1] === (aiColor === "w" ? "1" : "8")) {
-    s += 0.4;
-  }
-
-  return s;
-}
-
-function pickAIMove(game: Chess, difficulty: AIConfig["difficulty"]): { from: string; to: string; promotion?: string } | null {
-  const moves = game.moves({ verbose: true });
-  if (moves.length === 0) return null;
-
-  const aiColor = game.turn() as "w" | "b";
-
-  if (difficulty === "easy") {
-    // Easy: prefer captures and checks, but pick from top 50% randomly
-    const scored = moves.map((m) => ({
-      move: m,
-      score: scoreMove(game, m.from, m.to, aiColor),
-    }));
-    scored.sort((a, b) => b.score - a.score);
-    const topN = Math.max(3, Math.floor(scored.length * 0.5));
-    const pick = scored[Math.floor(Math.random() * topN)];
-    return { from: pick.move.from, to: pick.move.to, promotion: pick.move.promotion };
-  }
-
-  if (difficulty === "medium") {
-    // Medium: evaluate each resulting position
-    const scored = moves.map((m) => {
-      game.move(m.from, m.to);
-      const evalScore = evaluatePosition(game, aiColor);
-      game.undo();
-      return { move: m, score: scoreMove(game, m.from, m.to, aiColor) + evalScore };
-    });
-    scored.sort((a, b) => b.score - a.score);
-    const topN = Math.max(2, Math.floor(scored.length * 0.3));
-    const pick = scored[Math.floor(Math.random() * topN)];
-    return { from: pick.move.from, to: pick.move.to, promotion: pick.move.promotion };
-  }
-
-  // Hard: deeper evaluation with piece-square tables and look-ahead
-  const scored = moves.map((m) => {
-    game.move(m.from, m.to);
-    let bestOpponentScore = -Infinity;
-    const oppMoves = game.moves({ verbose: true });
-
-    // One-ply lookahead: evaluate opponent's best response
-    for (const om of oppMoves.slice(0, 10)) {
-      game.move(om.from, om.to);
-      const es = evaluatePosition(game, aiColor);
-      if (es > bestOpponentScore) bestOpponentScore = es;
-      game.undo();
-    }
-
-    const positionalScore = scoreMove(game, m.from, m.to, aiColor);
-    game.undo();
-
-    // We want positions where our eval is high minus opponent's best response
-    const evalScore = evaluatePosition(game, aiColor);
-    return { move: m, score: positionalScore + evalScore - bestOpponentScore * 0.5 };
-  });
-
-  scored.sort((a, b) => b.score - a.score);
-  // Pick from top 3 for variety
-  const topN = Math.min(3, scored.length);
-  const pick = scored[Math.floor(Math.random() * topN)];
-  return { from: pick.move.from, to: pick.move.to, promotion: pick.move.promotion };
-}
+// ── Depth-to-elo mapping for Stockfish strength limiting ──────────
+const DIFFICULTY_DEPTH: Record<string, number> = { easy: 5, medium: 10, hard: 15 };
+const DIFFICULTY_ELO: Record<string, number> = { easy: 1350, medium: 1850, hard: 2850 };
 
 // ── Context ───────────────────────────────────────────────────────
 
@@ -176,7 +42,7 @@ export function ChessProvider({ children }: { children: React.ReactNode }) {
     enabled: false,
     color: "black",
     difficulty: "medium",
-    depth: 3,
+    depth: 10,
   });
   const [isAIThinking, setIsAIThinking] = useState(false);
   const mountedRef = useRef(true);
@@ -248,30 +114,56 @@ export function ChessProvider({ children }: { children: React.ReactNode }) {
   );
 
   const isGameOver = useCallback((): boolean => game.isGameOver(), [game]);
-  const setGameMode = useCallback((mode: GameMode) => {}, []);
+  const setGameMode = useCallback((_mode: GameMode) => {}, []);
 
   const isAITurn = useCallback((): boolean => {
     if (!aiConfig.enabled || isGameOver()) return false;
     return gameState.turn === aiConfig.color;
   }, [aiConfig, gameState.turn, isGameOver]);
 
-  const makeAIMove = useCallback(() => {
+  const makeAIMove = useCallback(async () => {
     if (isAIThinking || game.isGameOver() || !aiConfig.enabled) return;
     if (game.turn() !== (aiConfig.color === "white" ? "w" : "b")) return;
 
     setIsAIThinking(true);
-    aiTimerRef.current = setTimeout(() => {
+
+    try {
+      const depth = DIFFICULTY_DEPTH[aiConfig.difficulty] ?? 10;
+      const elo = DIFFICULTY_ELO[aiConfig.difficulty];
+      const fen = game.fen();
+      const uci = await stockfishEngine.getBestMove(fen, { depth, elo });
+
       if (!mountedRef.current) return;
-      const move = pickAIMove(game, aiConfig.difficulty);
-      if (move) {
-        try {
-          game.move({ from: move.from, to: move.to, promotion: move.promotion as "q" | "r" | "b" | "n" | undefined });
-          updateState(game, "ai", { from: move.from, to: move.to });
-        } catch {}
+
+      const from = uci.slice(0, 2);
+      const to = uci.slice(2, 4);
+      const promotion = uci.length > 4 ? uci[4] : undefined;
+
+      // Validate move is legal
+      const legal = game.moves({ verbose: true });
+      const isValid = legal.some((m) => m.from === from && m.to === to);
+      if (isValid) {
+        game.move({ from, to, promotion: promotion as "q" | "r" | "b" | "n" | undefined });
+        updateState(game, "ai", { from, to });
+      } else if (legal.length > 0) {
+        // Fallback: first legal move
+        const fb = legal[0];
+        game.move({ from: fb.from, to: fb.to, promotion: fb.promotion });
+        updateState(game, "ai", { from: fb.from, to: fb.to });
       }
+    } catch {
+      // Engine error — fallback to random legal move
+      if (!mountedRef.current) return;
+      const legal = game.moves({ verbose: true });
+      if (legal.length > 0) {
+        const fb = legal[Math.floor(Math.random() * legal.length)];
+        game.move({ from: fb.from, to: fb.to, promotion: fb.promotion });
+        updateState(game, "ai", { from: fb.from, to: fb.to });
+      }
+    } finally {
       if (mountedRef.current) setIsAIThinking(false);
-    }, 200 + Math.random() * 400);
-  }, [game, aiConfig, isAIThinking, updateState, isGameOver]);
+    }
+  }, [game, aiConfig, updateState, isGameOver, isAIThinking]);
 
   const value = useMemo<ChessContextType>(
     () => ({
