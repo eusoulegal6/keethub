@@ -40,6 +40,21 @@ export const LOCAL_GAMES: LocalGame[] = [
       created_at: new Date().toISOString(),
     },
   },
+  {
+    slug: "chess",
+    route: "/hub/games/chess",
+    data: {
+      id: localId("chess"),
+      slug: "chess",
+      title: "Chess",
+      description: "Play chess locally, challenge the AI, or solve tactical puzzles. Classic strategy with a modern interface.",
+      category: "strategy",
+      thumbnail_url: null,
+      accent_color: "#a78bfa",
+      is_active: true,
+      created_at: new Date().toISOString(),
+    },
+  },
 ];
 
 // Quick lookup: slug → dedicated route (null = placeholder)
