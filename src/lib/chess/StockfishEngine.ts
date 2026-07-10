@@ -1,133 +1,260 @@
+import { Chess } from "chess.js";
+
 const WASM_SUPPORTED =
   typeof WebAssembly === "object" &&
   WebAssembly.validate(Uint8Array.of(0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00));
 
-const WORKER_PATH = WASM_SUPPORTED
+const WORKER_URL = WASM_SUPPORTED
   ? "/stockfish/stockfish.wasm.js"
   : "/stockfish/stockfish.js";
 
-export interface EngineOptions {
-  depth?: number;
-  elo?: number;
+// Heuristic evaluator — fast fallback if the engine is down
+const PIECE_VALUES: Record<string, number> = { q: 9, r: 5, b: 3.3, n: 3.2, p: 1 };
+
+function heuristicMove(fen: string): string | null {
+  let game: Chess;
+  try { game = new Chess(fen); } catch { return null; }
+  const moves = game.moves({ verbose: true });
+  if (moves.length === 0) return null;
+
+  const scored = moves.map((m) => {
+    let s = 0;
+    const captured = game.get(m.to);
+    if (captured) s += (PIECE_VALUES[captured.type] || 0) * 10;
+    if (["d4", "d5", "e4", "e5"].includes(m.to)) s += 0.5;
+    game.move(m.from, m.to);
+    if (game.isCheck()) s += 3;
+    if (game.isCheckmate()) s += 100;
+    game.undo();
+    return { move: m, score: s };
+  });
+  scored.sort((a, b) => b.score - a.score);
+  const pick = scored[Math.floor(Math.random() * Math.min(3, scored.length))];
+  return pick.move.from + pick.move.to + (pick.move.promotion || "");
 }
 
-interface QueuedRequest {
+// ── Engine ────────────────────────────────────────────────────────
+
+type Resolver = (move: string) => void;
+type Rejecter = (err: Error) => void;
+
+interface Job {
   fen: string;
-  options: EngineOptions;
-  resolve: (move: string) => void;
-  reject: (err: Error) => void;
+  depth: number;
+  elo?: number;
+  resolve: Resolver;
+  reject: Rejecter;
 }
 
 class StockfishEngine {
   private worker: Worker | null = null;
-  private ready = false;
-  private queue: QueuedRequest[] = [];
-  private pendingResolve: ((move: string) => void) | null = null;
-  private pendingReject: ((err: Error) => void) | null = null;
-  private outputBuffer = "";
+  private initPhase: "fresh" | "uci_sent" | "ready" | "failed" = "fresh";
+  private queue: Job[] = [];
+  private pending: Job | null = null;
+  private timeoutId: ReturnType<typeof setTimeout> | null = null;
+  private initError: string | null = null;
 
-  private getWorker(): Worker {
-    if (!this.worker) {
-      this.worker = new Worker(WORKER_PATH);
+  private getWorker(): Worker | null {
+    if (this.initPhase === "failed") return null;
+    if (this.worker) return this.worker;
+
+    try {
+      this.worker = new Worker(WORKER_URL);
+      this.initPhase = "uci_sent";
       this.worker.addEventListener("message", this.onMessage);
+      this.worker.addEventListener("error", this.onWorkerError);
+      this.worker.addEventListener("messageerror", () => {
+        this.initError = "Worker message error";
+        this.initPhase = "failed";
+      });
       this.worker.postMessage("uci");
+
+      // 10s bootstrap timeout
+      setTimeout(() => {
+        if (this.initPhase !== "ready" && this.initPhase !== "failed") {
+          this.initError = "Engine failed to initialize within 10s";
+          this.initPhase = "failed";
+          this.drainQueueWithFallback();
+        }
+      }, 10_000);
+    } catch (e) {
+      this.initError = `Cannot create worker: ${e instanceof Error ? e.message : String(e)}`;
+      this.initPhase = "failed";
+      return null;
     }
+
     return this.worker;
   }
 
-  private onMessage = (e: MessageEvent) => {
-    const text: string = e.data ?? "";
-    this.outputBuffer += text + "\n";
+  private onWorkerError = (e: ErrorEvent) => {
+    this.initError = `Worker error: ${e.message || "unknown"}`;
+    this.initPhase = "failed";
+    this.drainQueueWithFallback();
+  };
 
-    // UCI init complete
-    if (text === "uciok") {
-      this.ready = true;
+  private onMessage = (e: MessageEvent) => {
+    const text: string = (e.data ?? "").trim();
+    if (!text) return;
+
+    // ── Initialization ────────────────────────────────────────────
+    if (text.includes("uciok")) {
+      // Send options before isready
+      this.worker?.postMessage("setoption name UCI_LimitStrength value false");
+      this.worker?.postMessage("setoption name Threads value 1");
+      this.worker?.postMessage("isready");
+      return;
+    }
+
+    if (text.includes("readyok")) {
+      this.initPhase = "ready";
       if (this.queue.length > 0) {
-        const next = this.queue.shift()!;
-        this.sendPosition(next);
+        const job = this.queue.shift()!;
+        this.processJob(job);
       }
       return;
     }
 
-    // Parse bestmove
-    const bestMatch = text.match(/^bestmove\s+(\S+)/m);
+    // Ignore info lines during search
+    if (text.startsWith("info ")) {
+      // Reset timeout on each info line — engine is alive
+      this.resetTimeout();
+      return;
+    }
+
+    // ── Best move ─────────────────────────────────────────────────
+    const bestMatch = text.match(/^bestmove\s+(\S+)/);
     if (bestMatch) {
+      if (this.timeoutId) clearTimeout(this.timeoutId);
       const move = bestMatch[1];
-      if (this.pendingResolve) {
-        this.pendingResolve(move);
-        this.pendingResolve = null;
-        this.pendingReject = null;
+      if (this.pending) {
+        this.pending.resolve(move);
+        this.pending = null;
       }
-      // Process next in queue
+      // Process next queued job
       if (this.queue.length > 0) {
-        const next = this.queue.shift()!;
-        this.sendPosition(next);
+        const job = this.queue.shift()!;
+        this.processJob(job);
       }
       return;
     }
   };
 
-  private sendPosition(req: QueuedRequest) {
-    const w = this.getWorker();
-    const { fen, options } = req;
-    this.pendingResolve = req.resolve;
-    this.pendingReject = req.reject;
+  private resetTimeout() {
+    if (this.timeoutId) {
+      clearTimeout(this.timeoutId);
+      this.timeoutId = setTimeout(() => this.onJobTimeout(), 15_000);
+    }
+  }
 
-    // Apply elo limits if specified
-    if (options.elo) {
+  private onJobTimeout() {
+    if (this.pending) {
+      const fallback = heuristicMove(this.pending.fen);
+      if (fallback) {
+        this.pending.resolve(fallback);
+      } else {
+        this.pending.reject(new Error("Engine timed out"));
+      }
+      this.pending = null;
+    }
+    if (this.queue.length > 0) {
+      const job = this.queue.shift()!;
+      this.processJob(job);
+    }
+  }
+
+  private drainQueueWithFallback() {
+    // Reject current pending with fallback move
+    if (this.pending) {
+      const fb = heuristicMove(this.pending.fen);
+      if (fb) this.pending.resolve(fb);
+      else this.pending.reject(new Error(this.initError ?? "Engine unavailable"));
+      this.pending = null;
+    }
+    // Resolve all queued jobs with heuristic fallback
+    while (this.queue.length > 0) {
+      const job = this.queue.shift()!;
+      const fb = heuristicMove(job.fen);
+      if (fb) job.resolve(fb);
+      else job.reject(new Error(this.initError ?? "Engine unavailable"));
+    }
+  }
+
+  private processJob(job: Job) {
+    const w = this.worker;
+    if (!w || this.initPhase !== "ready") {
+      const fb = heuristicMove(job.fen);
+      if (fb) job.resolve(fb);
+      else job.reject(new Error("Engine not ready"));
+      return;
+    }
+
+    this.pending = job;
+
+    if (job.elo) {
       w.postMessage("setoption name UCI_LimitStrength value true");
-      w.postMessage(`setoption name UCI_Elo value ${options.elo}`);
+      w.postMessage(`setoption name UCI_Elo value ${job.elo}`);
     } else {
       w.postMessage("setoption name UCI_LimitStrength value false");
     }
 
     w.postMessage("ucinewgame");
-    w.postMessage(`position fen ${fen}`);
-    const depth = options.depth ?? 12;
-    w.postMessage(`go depth ${depth}`);
+    w.postMessage(`position fen ${job.fen}`);
+    w.postMessage(`go depth ${job.depth}`);
 
-    // Safety timeout — if no response in 30s, use a fallback
-    setTimeout(() => {
-      if (this.pendingResolve === req.resolve && this.pendingReject === req.reject) {
-        this.pendingResolve = null;
-        this.pendingReject = null;
-        req.reject(new Error("Stockfish timed out"));
-        if (this.queue.length > 0) {
-          const next = this.queue.shift()!;
-          this.sendPosition(next);
-        }
-      }
-    }, 30_000);
+    // Safety timeout — 15s, extended by info lines
+    this.timeoutId = setTimeout(() => this.onJobTimeout(), 15_000);
   }
 
-  async getBestMove(fen: string, options: EngineOptions = {}): Promise<string> {
-    const w = this.getWorker();
+  // ── Public API ──────────────────────────────────────────────────
 
-    if (!this.ready) {
-      return new Promise((resolve, reject) => {
-        this.queue.push({ fen, options, resolve, reject });
-      });
-    }
-
-    if (this.pendingResolve) {
-      return new Promise((resolve, reject) => {
-        this.queue.push({ fen, options, resolve, reject });
-      });
-    }
-
+  async getBestMove(fen: string, depth: number, elo?: number): Promise<string> {
     return new Promise((resolve, reject) => {
-      this.sendPosition({ fen, options, resolve, reject });
+      const job: Job = { fen, depth, elo, resolve, reject };
+
+      if (this.initPhase === "failed") {
+        const fb = heuristicMove(fen);
+        if (fb) resolve(fb);
+        else reject(new Error(this.initError ?? "Engine unavailable"));
+        return;
+      }
+
+      if (this.initPhase !== "ready") {
+        this.queue.push(job);
+        this.getWorker(); // starts bootstrap if needed
+        return;
+      }
+
+      if (this.pending) {
+        this.queue.push(job);
+        return;
+      }
+
+      this.processJob(job);
     });
   }
 
+  get isReady(): boolean {
+    return this.initPhase === "ready";
+  }
+
+  get hasFailed(): boolean {
+    return this.initPhase === "failed";
+  }
+
+  get failureReason(): string | null {
+    return this.initError;
+  }
+
   terminate() {
+    if (this.timeoutId) clearTimeout(this.timeoutId);
     if (this.worker) {
       this.worker.postMessage("quit");
       this.worker.removeEventListener("message", this.onMessage);
       this.worker.terminate();
       this.worker = null;
-      this.ready = false;
     }
+    this.initPhase = "fresh";
+    this.pending = null;
   }
 }
 

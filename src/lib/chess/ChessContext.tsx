@@ -131,7 +131,7 @@ export function ChessProvider({ children }: { children: React.ReactNode }) {
       const depth = DIFFICULTY_DEPTH[aiConfig.difficulty] ?? 10;
       const elo = DIFFICULTY_ELO[aiConfig.difficulty];
       const fen = game.fen();
-      const uci = await stockfishEngine.getBestMove(fen, { depth, elo });
+      const uci = await stockfishEngine.getBestMove(fen, depth, elo);
 
       if (!mountedRef.current) return;
 
