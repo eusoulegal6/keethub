@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { useHubStore } from "@/stores/hub-store";
 import { useMemo } from "react";
+import { LOCAL_GAMES, PORTED_ROUTES } from "@/lib/local-games";
 
 const gamesQuery = queryOptions({
   queryKey: ["games"],
@@ -17,8 +18,20 @@ export const Route = createFileRoute("/_authenticated/hub/")({
   component: LibraryPage,
 });
 
+function mergeGames(serverGames: Game[]): Game[] {
+  const seen = new Set(serverGames.map((g) => g.slug));
+  const merged = [...serverGames];
+  for (const local of LOCAL_GAMES) {
+    if (!seen.has(local.slug)) {
+      merged.push(local.data);
+    }
+  }
+  return merged;
+}
+
 function LibraryPage() {
-  const { data: games } = useSuspenseQuery(gamesQuery);
+  const { data: serverGames } = useSuspenseQuery(gamesQuery);
+  const games = useMemo(() => mergeGames(serverGames), [serverGames]);
   const search = useHubStore((s) => s.search);
   const setSearch = useHubStore((s) => s.setSearch);
   const activeCategory = useHubStore((s) => s.activeCategory);
@@ -102,13 +115,9 @@ function LibraryPage() {
   );
 }
 
-const PORTED_GAMES: Record<string, string> = {
-  "ping-pong": "/hub/games/ping-pong",
-};
-
 function GameCard({ game }: { game: Game }) {
   const accent = game.accent_color ?? "#a78bfa";
-  const route = PORTED_GAMES[game.slug];
+  const route = PORTED_ROUTES[game.slug];
   return (
     <Link
       {...(route

@@ -1,4 +1,4 @@
-import { createFileRoute, Link, notFound } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { queryOptions, useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { ArrowLeft, Trophy, Play } from "lucide-react";
@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { useState, useEffect, useRef, useCallback } from "react";
 import { getGameBySlug } from "@/lib/games.functions";
 import { getGameLeaderboard, submitScore } from "@/lib/scores.functions";
+import { LOCAL_GAMES } from "@/lib/local-games";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 
@@ -22,16 +23,20 @@ const INITIAL_BALL_SPEED_Y = 2.5;
 
 // ── Route ───────────────────────────────────────────────────────
 
+const LOCAL_PING_PONG = LOCAL_GAMES.find((g) => g.slug === "ping-pong")!.data;
+
 const gameQuery = queryOptions({
   queryKey: ["game", "ping-pong"],
-  queryFn: () => getGameBySlug({ data: { slug: "ping-pong" } }),
+  queryFn: async () => {
+    const serverGame = await getGameBySlug({ data: { slug: "ping-pong" } });
+    return serverGame ?? LOCAL_PING_PONG;
+  },
   staleTime: 60_000,
 });
 
 export const Route = createFileRoute("/_authenticated/hub/games/ping-pong")({
   loader: async ({ context }) => {
     const game = await context.queryClient.ensureQueryData(gameQuery);
-    if (!game) throw notFound();
     return { game };
   },
   component: PingPongGame,
