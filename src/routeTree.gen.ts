@@ -9,13 +9,29 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
 import { Route as AuthRouteImport } from './routes/auth'
+import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthCallbackRouteImport } from './routes/auth.callback'
+import { Route as AuthenticatedHubRouteImport } from './routes/_authenticated/hub'
+import { Route as AuthenticatedHubIndexRouteImport } from './routes/_authenticated/hub.index'
+import { Route as AuthenticatedHubProfileRouteImport } from './routes/_authenticated/hub.profile'
+import { Route as AuthenticatedHubLeaderboardRouteImport } from './routes/_authenticated/hub.leaderboard'
+import { Route as AuthenticatedHubGamesSlugRouteImport } from './routes/_authenticated/hub.games.$slug'
 
+const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
+  id: '/sitemap.xml',
+  path: '/sitemap.xml',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AuthRoute = AuthRouteImport.update({
   id: '/auth',
   path: '/auth',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuthenticatedRouteRoute = AuthenticatedRouteRouteImport.update({
+  id: '/_authenticated',
   getParentRoute: () => rootRouteImport,
 } as any)
 const IndexRoute = IndexRouteImport.update({
@@ -28,43 +44,132 @@ const AuthCallbackRoute = AuthCallbackRouteImport.update({
   path: '/callback',
   getParentRoute: () => AuthRoute,
 } as any)
+const AuthenticatedHubRoute = AuthenticatedHubRouteImport.update({
+  id: '/hub',
+  path: '/hub',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
+const AuthenticatedHubIndexRoute = AuthenticatedHubIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AuthenticatedHubRoute,
+} as any)
+const AuthenticatedHubProfileRoute = AuthenticatedHubProfileRouteImport.update({
+  id: '/profile',
+  path: '/profile',
+  getParentRoute: () => AuthenticatedHubRoute,
+} as any)
+const AuthenticatedHubLeaderboardRoute =
+  AuthenticatedHubLeaderboardRouteImport.update({
+    id: '/leaderboard',
+    path: '/leaderboard',
+    getParentRoute: () => AuthenticatedHubRoute,
+  } as any)
+const AuthenticatedHubGamesSlugRoute =
+  AuthenticatedHubGamesSlugRouteImport.update({
+    id: '/games/$slug',
+    path: '/games/$slug',
+    getParentRoute: () => AuthenticatedHubRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/auth': typeof AuthRouteWithChildren
+  '/sitemap.xml': typeof SitemapDotxmlRoute
+  '/hub': typeof AuthenticatedHubRouteWithChildren
   '/auth/callback': typeof AuthCallbackRoute
+  '/hub/leaderboard': typeof AuthenticatedHubLeaderboardRoute
+  '/hub/profile': typeof AuthenticatedHubProfileRoute
+  '/hub/': typeof AuthenticatedHubIndexRoute
+  '/hub/games/$slug': typeof AuthenticatedHubGamesSlugRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRouteWithChildren
+  '/sitemap.xml': typeof SitemapDotxmlRoute
   '/auth/callback': typeof AuthCallbackRoute
+  '/hub/leaderboard': typeof AuthenticatedHubLeaderboardRoute
+  '/hub/profile': typeof AuthenticatedHubProfileRoute
+  '/hub': typeof AuthenticatedHubIndexRoute
+  '/hub/games/$slug': typeof AuthenticatedHubGamesSlugRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
   '/auth': typeof AuthRouteWithChildren
+  '/sitemap.xml': typeof SitemapDotxmlRoute
+  '/_authenticated/hub': typeof AuthenticatedHubRouteWithChildren
   '/auth/callback': typeof AuthCallbackRoute
+  '/_authenticated/hub/leaderboard': typeof AuthenticatedHubLeaderboardRoute
+  '/_authenticated/hub/profile': typeof AuthenticatedHubProfileRoute
+  '/_authenticated/hub/': typeof AuthenticatedHubIndexRoute
+  '/_authenticated/hub/games/$slug': typeof AuthenticatedHubGamesSlugRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/auth' | '/auth/callback'
+  fullPaths:
+    | '/'
+    | '/auth'
+    | '/sitemap.xml'
+    | '/hub'
+    | '/auth/callback'
+    | '/hub/leaderboard'
+    | '/hub/profile'
+    | '/hub/'
+    | '/hub/games/$slug'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/auth' | '/auth/callback'
-  id: '__root__' | '/' | '/auth' | '/auth/callback'
+  to:
+    | '/'
+    | '/auth'
+    | '/sitemap.xml'
+    | '/auth/callback'
+    | '/hub/leaderboard'
+    | '/hub/profile'
+    | '/hub'
+    | '/hub/games/$slug'
+  id:
+    | '__root__'
+    | '/'
+    | '/_authenticated'
+    | '/auth'
+    | '/sitemap.xml'
+    | '/_authenticated/hub'
+    | '/auth/callback'
+    | '/_authenticated/hub/leaderboard'
+    | '/_authenticated/hub/profile'
+    | '/_authenticated/hub/'
+    | '/_authenticated/hub/games/$slug'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
   AuthRoute: typeof AuthRouteWithChildren
+  SitemapDotxmlRoute: typeof SitemapDotxmlRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/sitemap.xml': {
+      id: '/sitemap.xml'
+      path: '/sitemap.xml'
+      fullPath: '/sitemap.xml'
+      preLoaderRoute: typeof SitemapDotxmlRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/auth': {
       id: '/auth'
       path: '/auth'
       fullPath: '/auth'
       preLoaderRoute: typeof AuthRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/_authenticated': {
+      id: '/_authenticated'
+      path: ''
+      fullPath: '/'
+      preLoaderRoute: typeof AuthenticatedRouteRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/': {
@@ -81,8 +186,71 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthCallbackRouteImport
       parentRoute: typeof AuthRoute
     }
+    '/_authenticated/hub': {
+      id: '/_authenticated/hub'
+      path: '/hub'
+      fullPath: '/hub'
+      preLoaderRoute: typeof AuthenticatedHubRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
+    '/_authenticated/hub/': {
+      id: '/_authenticated/hub/'
+      path: '/'
+      fullPath: '/hub/'
+      preLoaderRoute: typeof AuthenticatedHubIndexRouteImport
+      parentRoute: typeof AuthenticatedHubRoute
+    }
+    '/_authenticated/hub/profile': {
+      id: '/_authenticated/hub/profile'
+      path: '/profile'
+      fullPath: '/hub/profile'
+      preLoaderRoute: typeof AuthenticatedHubProfileRouteImport
+      parentRoute: typeof AuthenticatedHubRoute
+    }
+    '/_authenticated/hub/leaderboard': {
+      id: '/_authenticated/hub/leaderboard'
+      path: '/leaderboard'
+      fullPath: '/hub/leaderboard'
+      preLoaderRoute: typeof AuthenticatedHubLeaderboardRouteImport
+      parentRoute: typeof AuthenticatedHubRoute
+    }
+    '/_authenticated/hub/games/$slug': {
+      id: '/_authenticated/hub/games/$slug'
+      path: '/games/$slug'
+      fullPath: '/hub/games/$slug'
+      preLoaderRoute: typeof AuthenticatedHubGamesSlugRouteImport
+      parentRoute: typeof AuthenticatedHubRoute
+    }
   }
 }
+
+interface AuthenticatedHubRouteChildren {
+  AuthenticatedHubLeaderboardRoute: typeof AuthenticatedHubLeaderboardRoute
+  AuthenticatedHubProfileRoute: typeof AuthenticatedHubProfileRoute
+  AuthenticatedHubIndexRoute: typeof AuthenticatedHubIndexRoute
+  AuthenticatedHubGamesSlugRoute: typeof AuthenticatedHubGamesSlugRoute
+}
+
+const AuthenticatedHubRouteChildren: AuthenticatedHubRouteChildren = {
+  AuthenticatedHubLeaderboardRoute: AuthenticatedHubLeaderboardRoute,
+  AuthenticatedHubProfileRoute: AuthenticatedHubProfileRoute,
+  AuthenticatedHubIndexRoute: AuthenticatedHubIndexRoute,
+  AuthenticatedHubGamesSlugRoute: AuthenticatedHubGamesSlugRoute,
+}
+
+const AuthenticatedHubRouteWithChildren =
+  AuthenticatedHubRoute._addFileChildren(AuthenticatedHubRouteChildren)
+
+interface AuthenticatedRouteRouteChildren {
+  AuthenticatedHubRoute: typeof AuthenticatedHubRouteWithChildren
+}
+
+const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
+  AuthenticatedHubRoute: AuthenticatedHubRouteWithChildren,
+}
+
+const AuthenticatedRouteRouteWithChildren =
+  AuthenticatedRouteRoute._addFileChildren(AuthenticatedRouteRouteChildren)
 
 interface AuthRouteChildren {
   AuthCallbackRoute: typeof AuthCallbackRoute
@@ -96,7 +264,9 @@ const AuthRouteWithChildren = AuthRoute._addFileChildren(AuthRouteChildren)
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
   AuthRoute: AuthRouteWithChildren,
+  SitemapDotxmlRoute: SitemapDotxmlRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

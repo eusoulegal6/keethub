@@ -1,4 +1,4 @@
-import { createFileRoute, Link, useServerFn } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { queryOptions, useSuspenseQuery } from "@tanstack/react-query";
 import { Search } from "lucide-react";
 import { listGames, type Game } from "@/lib/games.functions";
