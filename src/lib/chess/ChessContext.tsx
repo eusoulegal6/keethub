@@ -125,6 +125,7 @@ export function ChessProvider({ children }: { children: React.ReactNode }) {
     if (isAIThinking || game.isGameOver() || !aiConfig.enabled) return;
     if (game.turn() !== (aiConfig.color === "white" ? "w" : "b")) return;
 
+    console.log("[AI] makeAIMove called — requesting best move from Stockfish...");
     setIsAIThinking(true);
 
     try {
@@ -143,15 +144,18 @@ export function ChessProvider({ children }: { children: React.ReactNode }) {
       const legal = game.moves({ verbose: true });
       const isValid = legal.some((m) => m.from === from && m.to === to);
       if (isValid) {
+        console.log("[AI] Stockfish move accepted:", from, to, promotion || "");
         game.move({ from, to, promotion: promotion as "q" | "r" | "b" | "n" | undefined });
         updateState(game, "ai", { from, to });
       } else if (legal.length > 0) {
+        console.warn("[AI] Stockfish returned invalid move, using fallback");
         // Fallback: first legal move
         const fb = legal[0];
         game.move({ from: fb.from, to: fb.to, promotion: fb.promotion });
         updateState(game, "ai", { from: fb.from, to: fb.to });
       }
-    } catch {
+    } catch (e) {
+      console.error("[AI] Stockfish engine error:", e);
       // Engine error — fallback to random legal move
       if (!mountedRef.current) return;
       const legal = game.moves({ verbose: true });

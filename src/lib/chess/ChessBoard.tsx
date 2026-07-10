@@ -24,16 +24,14 @@ interface SquareProps {
   orientation: "white" | "black";
   disabled: boolean;
   sqSize: number;
-  onClick: (sq: string) => void;
+  onClick: () => void;
 }
 
 const ChessSquare = memo(
   ({ name, piece, isSelected, isLegalMove, isLastMove, bg, showRank, showFile, orientation, disabled, sqSize, onClick }: SquareProps) => {
-    const file = name[0];
-    const rank = name[1];
     return (
       <div
-        onClick={() => onClick(name)}
+        onClick={onClick}
         style={{
           width: sqSize,
           height: sqSize,
@@ -51,55 +49,39 @@ const ChessSquare = memo(
         {showRank && (
           <span
             style={{
-              position: "absolute",
-              left: 2,
-              top: 2,
-              fontSize: Math.max(8, sqSize * 0.18),
-              fontWeight: 600,
+              position: "absolute", left: 2, top: 2,
+              fontSize: Math.max(8, sqSize * 0.18), fontWeight: 600,
               color: bg === LIGHT ? "#b58863" : "#f0d9b5",
-              pointerEvents: "none",
-              lineHeight: 1,
+              pointerEvents: "none", lineHeight: 1,
             }}
           >
-            {rank}
+            {name[1]}
           </span>
         )}
         {showFile && (
           <span
             style={{
-              position: "absolute",
-              bottom: 2,
-              right: 2,
-              fontSize: Math.max(8, sqSize * 0.18),
-              fontWeight: 600,
+              position: "absolute", bottom: 2, right: 2,
+              fontSize: Math.max(8, sqSize * 0.18), fontWeight: 600,
               color: bg === LIGHT ? "#b58863" : "#f0d9b5",
-              pointerEvents: "none",
-              lineHeight: 1,
+              pointerEvents: "none", lineHeight: 1,
             }}
           >
-            {file}
+            {name[0]}
           </span>
         )}
         {piece && <ChessPiece piece={piece} size={sqSize} />}
         {isLegalMove && !piece && (
           <div
             style={{
-              width: Math.max(12, sqSize * 0.33),
-              height: Math.max(12, sqSize * 0.33),
-              borderRadius: "50%",
-              backgroundColor: "#000",
-              opacity: 0.3,
+              width: Math.max(12, sqSize * 0.33), height: Math.max(12, sqSize * 0.33),
+              borderRadius: "50%", backgroundColor: "#000", opacity: 0.3,
             }}
           />
         )}
       </div>
     );
   },
-  (a, b) =>
-    a.name === b.name && a.piece?.type === b.piece?.type && a.piece?.color === b.piece?.color &&
-    a.isSelected === b.isSelected && a.isLegalMove === b.isLegalMove &&
-    a.isLastMove === b.isLastMove && a.bg === b.bg && a.disabled === b.disabled &&
-    a.sqSize === b.sqSize && a.orientation === b.orientation,
 );
 
 ChessSquare.displayName = "ChessSquare";
@@ -118,6 +100,16 @@ interface BoardProps {
 export function ChessBoard({ fen, orientation = "white", onMove, disabled = false, squareSize = 60, lastMove }: BoardProps) {
   const [selected, setSelected] = useState<string | null>(null);
   const [legalMoves, setLegalMoves] = useState<string[]>([]);
+
+  // Keep mutable refs so handleClick is stable and memo works
+  const selectedRef = useRef(selected);
+  selectedRef.current = selected;
+  const legalRef = useRef(legalMoves);
+  legalRef.current = legalMoves;
+  const onMoveRef = useRef(onMove);
+  onMoveRef.current = onMove;
+  const disabledRef = useRef(disabled);
+  disabledRef.current = disabled;
 
   // Reset selection when fen changes
   useEffect(() => {
@@ -138,14 +130,19 @@ export function ChessBoard({ fen, orientation = "white", onMove, disabled = fals
       }
     }
     return m;
-  }, [game.fen()]);
+  }, [game.fen(), game]);
 
+  // Stable click handler — always reads latest state from refs
   const handleClick = useCallback(
     (sq: string) => {
-      if (disabled) return;
+      if (disabledRef.current) return;
 
-      if (selected && legalMoves.includes(sq)) {
-        const success = onMove ? onMove(selected, sq) : true;
+      const sel = selectedRef.current;
+      const legals = legalRef.current;
+      const move = onMoveRef.current;
+
+      if (sel && legals.includes(sq)) {
+        const success = move ? move(sel, sq) : true;
         if (success !== false) {
           setSelected(null);
           setLegalMoves([]);
@@ -164,7 +161,19 @@ export function ChessBoard({ fen, orientation = "white", onMove, disabled = fals
         setLegalMoves([]);
       }
     },
-    [disabled, selected, legalMoves, pieceMap, game, onMove],
+    [pieceMap, game],
+  );
+
+  // Per-square click callbacks — stable identity per square name
+  const clickCallbacks = useRef<Record<string, () => void>>({});
+  const getSquareClick = useCallback(
+    (sq: string) => {
+      if (!clickCallbacks.current[sq]) {
+        clickCallbacks.current[sq] = () => handleClick(sq);
+      }
+      return clickCallbacks.current[sq];
+    },
+    [handleClick],
   );
 
   const squares = useMemo(() => {
@@ -189,13 +198,13 @@ export function ChessBoard({ fen, orientation = "white", onMove, disabled = fals
             orientation={orientation}
             disabled={disabled}
             sqSize={squareSize}
-            onClick={handleClick}
+            onClick={getSquareClick(sq)}
           />,
         );
       }
     }
     return arr;
-  }, [pieceMap, selected, legalMoves, lastMove, orientation, disabled, squareSize, handleClick]);
+  }, [pieceMap, selected, legalMoves, lastMove, orientation, disabled, squareSize, getSquareClick]);
 
   const boardPx = squareSize * 8;
 

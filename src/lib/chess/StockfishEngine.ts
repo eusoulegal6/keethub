@@ -55,18 +55,24 @@ class StockfishEngine {
   private initError: string | null = null;
 
   private getWorker(): Worker | null {
-    if (this.initPhase === "failed") return null;
+    if (this.initPhase === "failed") {
+      console.warn("[SF] getWorker called but engine has failed:", this.initError);
+      return null;
+    }
     if (this.worker) return this.worker;
 
+    console.log("[SF] Creating Stockfish worker from:", WORKER_URL);
     try {
       this.worker = new Worker(WORKER_URL);
       this.initPhase = "uci_sent";
       this.worker.addEventListener("message", this.onMessage);
       this.worker.addEventListener("error", this.onWorkerError);
       this.worker.addEventListener("messageerror", () => {
+        console.error("[SF] messageerror event fired");
         this.initError = "Worker message error";
         this.initPhase = "failed";
       });
+      console.log("[SF] Worker created, sending uci");
       this.worker.postMessage("uci");
 
       // 10s bootstrap timeout
@@ -87,6 +93,7 @@ class StockfishEngine {
   }
 
   private onWorkerError = (e: ErrorEvent) => {
+    console.error("[SF] Worker error event:", e.message, e.filename, e.lineno);
     this.initError = `Worker error: ${e.message || "unknown"}`;
     this.initPhase = "failed";
     this.drainQueueWithFallback();
@@ -96,8 +103,16 @@ class StockfishEngine {
     const text: string = (e.data ?? "").trim();
     if (!text) return;
 
+    // Log first 5 messages for debugging
+    if (!(this as any)._msgCount) (this as any)._msgCount = 0;
+    if ((this as any)._msgCount < 5) {
+      console.log(`[SF msg #${(this as any)._msgCount}] ${text}`);
+      (this as any)._msgCount++;
+    }
+
     // ── Initialization ────────────────────────────────────────────
     if (text.includes("uciok")) {
+      console.log("[SF] ← uciok — sending setoption + isready");
       // Send options before isready
       this.worker?.postMessage("setoption name UCI_LimitStrength value false");
       this.worker?.postMessage("setoption name Threads value 1");
@@ -106,6 +121,7 @@ class StockfishEngine {
     }
 
     if (text.includes("readyok")) {
+      console.log("[SF] ← readyok — engine is ready, queue length:", this.queue.length);
       this.initPhase = "ready";
       if (this.queue.length > 0) {
         const job = this.queue.shift()!;
@@ -124,6 +140,7 @@ class StockfishEngine {
     // ── Best move ─────────────────────────────────────────────────
     const bestMatch = text.match(/^bestmove\s+(\S+)/);
     if (bestMatch) {
+      console.log("[SF] ← bestmove:", bestMatch[1]);
       if (this.timeoutId) clearTimeout(this.timeoutId);
       const move = bestMatch[1];
       if (this.pending) {
@@ -147,6 +164,7 @@ class StockfishEngine {
   }
 
   private onJobTimeout() {
+    console.warn("[SF] Job timed out, using heuristic fallback");
     if (this.pending) {
       const fallback = heuristicMove(this.pending.fen);
       if (fallback) {
@@ -163,7 +181,7 @@ class StockfishEngine {
   }
 
   private drainQueueWithFallback() {
-    // Reject current pending with fallback move
+    console.warn("[SF] Draining queue with fallback — reason:", this.initError, "pending:", !!this.pending, "queued:", this.queue.length);
     if (this.pending) {
       const fb = heuristicMove(this.pending.fen);
       if (fb) this.pending.resolve(fb);
@@ -189,6 +207,7 @@ class StockfishEngine {
     }
 
     this.pending = job;
+    console.log("[SF] → go depth", job.depth, job.elo ? `(elo ${job.elo})` : "");
 
     if (job.elo) {
       w.postMessage("setoption name UCI_LimitStrength value true");
