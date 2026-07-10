@@ -57,8 +57,7 @@ export function ChessProvider({ children }: { children: React.ReactNode }) {
   // Stable callback ref for the engine — always applies move to current game
   const onEngineMoveRef = useRef<EngineCallback>((_) => {});
   onEngineMoveRef.current = (uci: string) => {
-    console.log("[AI] Callback invoked, mounted:", mountedRef.current, "uci:", uci);
-    if (!mountedRef.current) return;
+    console.log("[AI] Callback invoked, uci:", uci);
 
     const from = uci.slice(0, 2);
     const to = uci.slice(2, 4);
@@ -66,29 +65,22 @@ export function ChessProvider({ children }: { children: React.ReactNode }) {
 
     const g = gameRef.current;
     const legal = g.moves({ verbose: true });
-    console.log("[AI] Legal moves:", legal.length, "checking", from, to);
+    console.log("[AI] Legal:", legal.length, "checking", from, to);
     const isValid = legal.some((m) => m.from === from && m.to === to);
-    console.log("[AI] Valid?", isValid);
 
     if (isValid) {
-      console.log("[AI] Applying:", from, to);
       g.move({ from, to, promotion: promotion as "q" | "r" | "b" | "n" | undefined });
-      const clone = new Chess(g.fen());
-      const cfg = aiConfigRef.current;
-      setGameState(buildGameState(clone, cfg.enabled ? "ai" : "local", { from, to }));
-      setGame(clone);
-      console.log("[AI] Done — new FEN:", clone.fen());
     } else if (legal.length > 0) {
-      console.warn("[AI] Fallback:", legal[0].from, legal[0].to);
       const fb = legal[0];
       g.move({ from: fb.from, to: fb.to, promotion: fb.promotion });
-      const clone = new Chess(g.fen());
-      const cfg = aiConfigRef.current;
-      setGameState(buildGameState(clone, cfg.enabled ? "ai" : "local", { from: fb.from, to: fb.to }));
-      setGame(clone);
     }
+
+    const clone = new Chess(g.fen());
+    const cfg = aiConfigRef.current;
+    setGameState(buildGameState(clone, cfg.enabled ? "ai" : "local", { from: isValid ? from : legal[0]?.from, to: isValid ? to : legal[0]?.to }));
+    setGame(clone);
     setIsAIThinking(false);
-    console.log("[AI] isAIThinking = false");
+    console.log("[AI] Done — new FEN:", clone.fen());
   };
 
   const updateState = useCallback(
