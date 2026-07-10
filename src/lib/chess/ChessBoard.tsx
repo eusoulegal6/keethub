@@ -164,16 +164,19 @@ export function ChessBoard({ fen, orientation = "white", onMove, disabled = fals
     [pieceMap, game],
   );
 
-  // Per-square click callbacks — stable identity per square name
-  const clickCallbacks = useRef<Record<string, () => void>>({});
+  // Per-square click callbacks — rebuilt when handleClick changes
+  const clickCallbacks = useMemo(() => {
+    const map: Record<string, () => void> = {};
+    return map;
+  }, [handleClick]);
   const getSquareClick = useCallback(
     (sq: string) => {
-      if (!clickCallbacks.current[sq]) {
-        clickCallbacks.current[sq] = () => handleClick(sq);
+      if (!clickCallbacks[sq]) {
+        clickCallbacks[sq] = () => handleClick(sq);
       }
-      return clickCallbacks.current[sq];
+      return clickCallbacks[sq];
     },
-    [handleClick],
+    [handleClick, clickCallbacks],
   );
 
   const squares = useMemo(() => {
