@@ -8,8 +8,6 @@ const WORKER_URL = WASM_SUPPORTED
   ? "/stockfish/stockfish.wasm.js"
   : "/stockfish/stockfish.js";
 
-// ── Heuristic fallback ───────────────────────────────────────────
-
 const PIECE_VALUES: Record<string, number> = { q: 9, r: 5, b: 3.3, n: 3.2, p: 1 };
 
 function heuristicMove(fen: string): string | null {
@@ -17,249 +15,196 @@ function heuristicMove(fen: string): string | null {
   try { game = new Chess(fen); } catch { return null; }
   const moves = game.moves({ verbose: true });
   if (moves.length === 0) return null;
-
-  // Score each move using a fresh clone per move (no mutating the board mid-loop)
   const scored = moves.map((m) => {
     let s = 0;
     const captured = game.get(m.to);
     if (captured) s += (PIECE_VALUES[captured.type] || 0) * 10;
     if (["d4", "d5", "e4", "e5"].includes(m.to)) s += 0.5;
-
     const clone = new Chess(game.fen());
     clone.move(m.from, m.to);
     if (clone.isCheck()) s += 3;
     if (clone.isCheckmate()) s += 100;
-
     return { from: m.from, to: m.to, promotion: m.promotion, score: s };
   });
-
   scored.sort((a, b) => b.score - a.score);
   const pick = scored[Math.floor(Math.random() * Math.min(3, scored.length))];
   return pick.from + pick.to + (pick.promotion || "");
 }
 
-// ── Engine singleton ─────────────────────────────────────────────
+// ── Engine with sync callback ────────────────────────────────────
 
-type Resolver = (move: string) => void;
-type Rejecter = (err: Error) => void;
+export type EngineCallback = (uci: string) => void;
 
 interface Job {
   fen: string;
   depth: number;
   elo?: number;
-  resolve: Resolver;
-  reject: Rejecter;
+  callback: EngineCallback;
 }
 
 class StockfishEngine {
   private worker: Worker | null = null;
-  private initPhase: "fresh" | "uci_sent" | "ready" | "failed" = "fresh";
+  private ready = false;
+  private failed = false;
   private queue: Job[] = [];
   private pending: Job | null = null;
-  private searchTimeoutId: ReturnType<typeof setTimeout> | null = null;
-  private initTimeoutId: ReturnType<typeof setTimeout> | null = null;
-  private initError: string | null = null;
+  private searchTimer: ReturnType<typeof setTimeout> | null = null;
+  private bootTimer: ReturnType<typeof setTimeout> | null = null;
 
-  private getWorker(): Worker | null {
-    if (this.initPhase === "failed") {
-      console.warn("[SF] getWorker called but engine has failed:", this.initError);
-      return null;
-    }
-    if (this.worker) return this.worker;
-
-    console.log("[SF] Creating worker from", WORKER_URL);
+  private ensureWorker() {
+    if (this.worker || this.failed) return;
     try {
+      console.log("[SF] Creating worker");
       this.worker = new Worker(WORKER_URL);
-      this.initPhase = "uci_sent";
       this.worker.addEventListener("message", this.onMessage);
-      this.worker.addEventListener("error", this.onWorkerError);
-      this.worker.addEventListener("messageerror", () => {
-        console.error("[SF] messageerror event");
-        this.initError = "Worker message error";
-        this.initPhase = "failed";
+      this.worker.addEventListener("error", (e) => {
+        console.error("[SF] Error:", e.message);
+        this.failed = true;
+        this.drainWithFallback();
       });
       this.worker.postMessage("uci");
-
-      // 30s bootstrap timeout (WASM init is slow on some devices)
-      this.initTimeoutId = setTimeout(() => {
-        if (this.initPhase !== "ready" && this.initPhase !== "failed") {
-          console.warn("[SF] Bootstrap timeout — engine didn't reach ready state");
-          this.initError = "Engine failed to initialize within 30s";
-          this.initPhase = "failed";
-          this.drainQueueWithFallback();
+      this.bootTimer = setTimeout(() => {
+        if (!this.ready && !this.failed) {
+          console.warn("[SF] Boot timeout");
+          this.failed = true;
+          this.drainWithFallback();
         }
       }, 30_000);
     } catch (e) {
-      this.initError = `Cannot create worker: ${e instanceof Error ? e.message : String(e)}`;
-      this.initPhase = "failed";
-      return null;
+      console.error("[SF] Cannot create worker:", e);
+      this.failed = true;
+      this.drainWithFallback();
     }
-
-    return this.worker;
   }
 
-  private onWorkerError = (e: ErrorEvent) => {
-    console.error("[SF] Worker error:", e.message, e.filename);
-    this.initError = `Worker error: ${e.message || "unknown"}`;
-    this.initPhase = "failed";
-    this.drainQueueWithFallback();
-  };
-
   private onMessage = (e: MessageEvent) => {
-    const text: string = typeof e.data === "string" ? e.data.trim() : "";
+    const text = typeof e.data === "string" ? e.data.trim() : "";
     if (!text) return;
 
-    // ── Initialization ────────────────────────────────────────────
     if (text.includes("uciok")) {
-      console.log("[SF] ← uciok — sending isready (options per-job)");
-      // Don't set options here — just isready. Options are set per-job
-      // before position/go. This avoids flooding the engine during init.
       this.worker?.postMessage("isready");
       return;
     }
 
     if (text.includes("readyok")) {
-      if (this.initTimeoutId) { clearTimeout(this.initTimeoutId); this.initTimeoutId = null; }
-      console.log("[SF] ← readyok — engine ready, queue:", this.queue.length);
-      this.initPhase = "ready";
+      if (this.bootTimer) { clearTimeout(this.bootTimer); this.bootTimer = null; }
+      console.log("[SF] Ready");
+      this.ready = true;
       if (this.queue.length > 0) {
         const job = this.queue.shift()!;
-        this.processJob(job);
+        this.runJob(job);
       }
       return;
     }
 
-    // ── Best move ─────────────────────────────────────────────────
-    const bestMatch = text.match(/^bestmove\s+(\S+)/);
-    if (bestMatch) {
-      console.log("[SF] ← bestmove:", bestMatch[1]);
-      if (this.searchTimeoutId) { clearTimeout(this.searchTimeoutId); this.searchTimeoutId = null; }
-      const move = bestMatch[1];
-      if (this.pending) {
-        this.pending.resolve(move);
-        this.pending = null;
-      }
-      if (this.queue.length > 0) {
-        const job = this.queue.shift()!;
-        this.processJob(job);
-      }
-      return;
-    }
-
-    // Info lines during search — engine is alive, extend timeout
     if (text.startsWith("info ")) {
-      this.extendSearchTimeout();
+      this.resetSearchTimer();
+      return;
+    }
+
+    const best = text.match(/^bestmove\s+(\S+)/);
+    if (best) {
+      console.log("[SF] bestmove:", best[1]);
+      if (this.searchTimer) { clearTimeout(this.searchTimer); this.searchTimer = null; }
+      const uci = best[1];
+      if (this.pending) {
+        const cb = this.pending.callback;
+        this.pending = null;
+        cb(uci);
+      }
+      if (this.queue.length > 0) {
+        const job = this.queue.shift()!;
+        this.runJob(job);
+      }
       return;
     }
   };
 
-  private extendSearchTimeout() {
-    if (this.searchTimeoutId) {
-      clearTimeout(this.searchTimeoutId);
-      this.searchTimeoutId = setTimeout(() => this.onSearchTimeout(), 30_000);
+  private resetSearchTimer() {
+    if (this.searchTimer) {
+      clearTimeout(this.searchTimer);
+      this.searchTimer = setTimeout(() => this.onSearchTimeout(), 30_000);
     }
   }
 
   private onSearchTimeout() {
-    console.warn("[SF] Search timed out — using heuristic fallback");
+    console.warn("[SF] Search timeout, fallback");
     if (this.pending) {
       const fb = heuristicMove(this.pending.fen);
-      if (fb) this.pending.resolve(fb);
-      else this.pending.reject(new Error("Engine search timed out"));
+      if (fb) this.pending.callback(fb);
       this.pending = null;
     }
     if (this.queue.length > 0) {
       const job = this.queue.shift()!;
-      this.processJob(job);
+      this.runJob(job);
     }
   }
 
-  private drainQueueWithFallback() {
-    console.warn("[SF] drainQueueWithFallback — reason:", this.initError, "pending:", !!this.pending, "queued:", this.queue.length);
+  private drainWithFallback() {
     if (this.pending) {
       const fb = heuristicMove(this.pending.fen);
-      if (fb) this.pending.resolve(fb);
-      else this.pending.reject(new Error(this.initError ?? "Engine unavailable"));
+      if (fb) this.pending.callback(fb);
       this.pending = null;
     }
     while (this.queue.length > 0) {
       const job = this.queue.shift()!;
       const fb = heuristicMove(job.fen);
-      if (fb) job.resolve(fb);
-      else job.reject(new Error(this.initError ?? "Engine unavailable"));
+      if (fb) job.callback(fb);
     }
   }
 
-  private processJob(job: Job) {
+  private runJob(job: Job) {
     const w = this.worker;
-    if (!w || this.initPhase !== "ready") {
-      console.warn("[SF] processJob called but engine not ready, using heuristic");
+    if (!w || !this.ready) {
       const fb = heuristicMove(job.fen);
-      if (fb) job.resolve(fb);
-      else job.reject(new Error("Engine not ready"));
+      if (fb) job.callback(fb);
       return;
     }
-
     this.pending = job;
-    console.log("[SF] → position + go depth", job.depth, job.elo ? `(elo ${job.elo})` : "");
-
+    console.log("[SF] go depth", job.depth);
     if (job.elo) {
       w.postMessage("setoption name UCI_LimitStrength value true");
       w.postMessage(`setoption name UCI_Elo value ${job.elo}`);
     } else {
       w.postMessage("setoption name UCI_LimitStrength value false");
     }
-
     w.postMessage("ucinewgame");
     w.postMessage(`position fen ${job.fen}`);
     w.postMessage(`go depth ${job.depth}`);
-
-    this.searchTimeoutId = setTimeout(() => this.onSearchTimeout(), 30_000);
+    this.searchTimer = setTimeout(() => this.onSearchTimeout(), 30_000);
   }
 
   // ── Public API ──────────────────────────────────────────────────
 
-  async getBestMove(fen: string, depth: number, elo?: number): Promise<string> {
-    return new Promise((resolve, reject) => {
-      const job: Job = { fen, depth, elo, resolve, reject };
-
-      if (this.initPhase === "failed") {
-        const fb = heuristicMove(fen);
-        if (fb) resolve(fb);
-        else reject(new Error(this.initError ?? "Engine unavailable"));
-        return;
-      }
-
-      if (this.initPhase !== "ready") {
-        this.queue.push(job);
-        this.getWorker();
-        return;
-      }
-
-      if (this.pending) {
-        this.queue.push(job);
-        return;
-      }
-
-      this.processJob(job);
-    });
+  /** Request a best move. Calls callback(uci) synchronously when ready. */
+  requestMove(fen: string, depth: number, elo: number | undefined, callback: EngineCallback) {
+    if (this.failed) {
+      const fb = heuristicMove(fen);
+      if (fb) callback(fb);
+      return;
+    }
+    if (!this.ready) {
+      this.queue.push({ fen, depth, elo, callback });
+      this.ensureWorker();
+      return;
+    }
+    if (this.pending) {
+      this.queue.push({ fen, depth, elo, callback });
+      return;
+    }
+    this.runJob({ fen, depth, elo, callback });
   }
 
-  get isReady(): boolean { return this.initPhase === "ready"; }
-  get hasFailed(): boolean { return this.initPhase === "failed"; }
-  get failureReason(): string | null { return this.initError; }
-
   terminate() {
-    if (this.initTimeoutId) clearTimeout(this.initTimeoutId);
-    if (this.searchTimeoutId) clearTimeout(this.searchTimeoutId);
+    if (this.bootTimer) clearTimeout(this.bootTimer);
+    if (this.searchTimer) clearTimeout(this.searchTimer);
     if (this.worker) {
       this.worker.postMessage("quit");
-      this.worker.removeEventListener("message", this.onMessage);
       this.worker.terminate();
       this.worker = null;
     }
-    this.initPhase = "fresh";
-    this.pending = null;
+    this.ready = false;
+    this.failed = false;
   }
 }
 
