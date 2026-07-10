@@ -112,6 +112,8 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
         { name: "twitter:card", content: "summary_large_image" },
         { name: "twitter:title", content: "Children's ESL GameHub — Play. Compete. Level up." },
         { name: "twitter:description", content: "Your home base for browser games. Jump between titles, track your scores, and climb the leaderboards." },
+        { property: "og:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/992a95c4-cc76-411e-a201-b490d0abf752/id-preview-57162308--f9df7107-d6f6-4283-9383-f85944efabb4.lovable.app-1783645199870.png" },
+        { name: "twitter:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/992a95c4-cc76-411e-a201-b490d0abf752/id-preview-57162308--f9df7107-d6f6-4283-9383-f85944efabb4.lovable.app-1783645199870.png" },
       ],
       links: [
         { rel: "stylesheet", href: appCss },
