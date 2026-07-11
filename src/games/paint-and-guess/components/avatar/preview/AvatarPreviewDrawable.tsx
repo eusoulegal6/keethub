@@ -537,14 +537,14 @@ export function AvatarPreviewDrawable({
             }
             
             fabricCanvas.renderAll();
-            lastLoadedDrawingsRef.current = config.customDrawings;
+            lastLoadedDrawingsRef.current = config.customDrawings ?? null;
             hasLoadedInitialDrawingsRef.current = true;
           });
         }
       } else {
         console.warn('⚠️ [AvatarPreviewDrawable] Invalid drawings data structure');
         fabricCanvas.renderAll();
-        lastLoadedDrawingsRef.current = config.customDrawings;
+        lastLoadedDrawingsRef.current = config.customDrawings ?? null;
         hasLoadedInitialDrawingsRef.current = true;
       }
     } catch (error) {

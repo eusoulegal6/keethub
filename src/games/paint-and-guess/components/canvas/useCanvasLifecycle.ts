@@ -7,8 +7,8 @@ interface CanvasSize {
 }
 
 interface UseCanvasLifecycleOptions {
-  canvasRef: React.RefObject<HTMLCanvasElement>;
-  containerRef: React.RefObject<HTMLDivElement>;
+  canvasRef: React.RefObject<HTMLCanvasElement | null>;
+  containerRef: React.RefObject<HTMLDivElement | null>;
   isDrawer: boolean;
   isGameActive: boolean;
   activeColor: string;
@@ -21,7 +21,7 @@ interface UseCanvasLifecycleOptions {
 interface UseCanvasLifecycleReturn {
   fabricCanvas: FabricCanvas | null;
   isDisposed: boolean;
-  isCanvasValid: (canvas: FabricCanvas | null) => boolean;
+  isCanvasValid: (canvas: FabricCanvas | null) => canvas is FabricCanvas;
 }
 
 /**
@@ -122,7 +122,7 @@ export function useCanvasLifecycle({
   }, [isDrawer, containerRef]);
 
   // Helper function to check if canvas is valid and not disposed
-  const isCanvasValid = useCallback((canvas: FabricCanvas | null): boolean => {
+  const isCanvasValid = useCallback((canvas: FabricCanvas | null): canvas is FabricCanvas => {
     if (!canvas || isDisposedRef.current) {
       return false;
     }

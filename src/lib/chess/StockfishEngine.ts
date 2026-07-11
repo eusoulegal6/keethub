@@ -21,7 +21,7 @@ function heuristicMove(fen: string): string | null {
     if (captured) s += (PIECE_VALUES[captured.type] || 0) * 10;
     if (["d4", "d5", "e4", "e5"].includes(m.to)) s += 0.5;
     const clone = new Chess(game.fen());
-    clone.move(m.from, m.to);
+    clone.move({ from: m.from, to: m.to, promotion: m.promotion });
     if (clone.isCheck()) s += 3;
     if (clone.isCheckmate()) s += 100;
     return { from: m.from, to: m.to, promotion: m.promotion, score: s };

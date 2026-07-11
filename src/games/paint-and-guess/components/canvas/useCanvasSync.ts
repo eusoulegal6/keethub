@@ -7,7 +7,7 @@ interface UseCanvasSyncOptions {
   isDrawer: boolean;
   isGameActive: boolean;
   roundNumber: number;
-  isCanvasValid: (canvas: FabricCanvas | null) => boolean;
+  isCanvasValid: (canvas: FabricCanvas | null) => canvas is FabricCanvas;
   isReceivingRef: React.MutableRefObject<boolean>;
 }
 
@@ -94,6 +94,7 @@ export function useCanvasSync({
     const finalizedPaths = new Set<string>();
     // Track brush properties (opacity, hardness) for each path
     const pathProperties = new Map<string, { opacity: number; hardness: number; strokeWidth: number }>();
+    const accumulatedPathPoints = new Map<string, number[][]>();
     // Buffer path-update events that arrive after path-complete (for network latency handling)
     const pendingPathCompletes = new Map<string, {
       event: any;
@@ -287,12 +288,12 @@ export function useCanvasSync({
               selectable: false,
               evented: false,
               objectCaching: false,
-              shadow: shadowBlur > 0 ? {
+              shadow: (shadowBlur > 0 ? {
                 blur: shadowBlur,
                 offsetX: 0,
                 offsetY: 0,
                 color: event.data.stroke || "#000000",
-              } : null,
+              } : null) as any,
             });
 
             activePaths.set(event.pathId, path);
@@ -444,13 +445,14 @@ export function useCanvasSync({
 
             // Use enlivenObjects for final path (this is the complete, optimized path)
             // fabric.util is accessed from the fabric namespace
-            fabric.util.enlivenObjects([pending.event.data]).then((objects: FabricObject[]) => {
+            fabric.util.enlivenObjects([pending.event.data]).then((objects) => {
+            const fabricObjects = objects as FabricObject[];
             if (!isCanvasValid(fabricCanvas)) {
               isReceivingRef.current = false;
               return;
             }
             
-            objects.forEach((obj) => {
+            fabricObjects.forEach((obj) => {
               obj.selectable = false;
               obj.evented = false;
               obj.hoverCursor = 'default';
@@ -518,13 +520,14 @@ export function useCanvasSync({
         
         try {
           // fabric.util is accessed from the fabric namespace
-          fabric.util.enlivenObjects([event.data]).then((objects: FabricObject[]) => {
+          fabric.util.enlivenObjects([event.data]).then((objects) => {
+            const fabricObjects = objects as FabricObject[];
             if (!isCanvasValid(fabricCanvas)) {
               isReceivingRef.current = false;
               return;
             }
             
-            objects.forEach((obj) => {
+            fabricObjects.forEach((obj) => {
               obj.selectable = false;
               obj.evented = false;
               obj.hoverCursor = 'default';

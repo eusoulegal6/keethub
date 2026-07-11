@@ -18,8 +18,12 @@ import { Route as AuthenticatedHubRouteImport } from './routes/_authenticated/hu
 import { Route as AuthenticatedHubIndexRouteImport } from './routes/_authenticated/hub.index'
 import { Route as AuthenticatedHubProfileRouteImport } from './routes/_authenticated/hub.profile'
 import { Route as AuthenticatedHubLeaderboardRouteImport } from './routes/_authenticated/hub.leaderboard'
-import { Route as AuthenticatedHubGamesSlugRouteImport } from './routes/_authenticated/hub.games.$slug'
+import { Route as AuthenticatedHubGamesTriviaBlitzRouteImport } from './routes/_authenticated/hub.games.trivia-blitz'
+import { Route as AuthenticatedHubGamesSemanticRouteImport } from './routes/_authenticated/hub.games.semantic'
 import { Route as AuthenticatedHubGamesPingPongRouteImport } from './routes/_authenticated/hub.games.ping-pong'
+import { Route as AuthenticatedHubGamesPaintAndGuessRouteImport } from './routes/_authenticated/hub.games.paint-and-guess'
+import { Route as AuthenticatedHubGamesChessRouteImport } from './routes/_authenticated/hub.games.chess'
+import { Route as AuthenticatedHubGamesSlugRouteImport } from './routes/_authenticated/hub.games.$slug'
 
 const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
   id: '/sitemap.xml',
@@ -66,16 +70,40 @@ const AuthenticatedHubLeaderboardRoute =
     path: '/leaderboard',
     getParentRoute: () => AuthenticatedHubRoute,
   } as any)
-const AuthenticatedHubGamesSlugRoute =
-  AuthenticatedHubGamesSlugRouteImport.update({
-    id: '/games/$slug',
-    path: '/games/$slug',
+const AuthenticatedHubGamesTriviaBlitzRoute =
+  AuthenticatedHubGamesTriviaBlitzRouteImport.update({
+    id: '/games/trivia-blitz',
+    path: '/games/trivia-blitz',
+    getParentRoute: () => AuthenticatedHubRoute,
+  } as any)
+const AuthenticatedHubGamesSemanticRoute =
+  AuthenticatedHubGamesSemanticRouteImport.update({
+    id: '/games/semantic',
+    path: '/games/semantic',
     getParentRoute: () => AuthenticatedHubRoute,
   } as any)
 const AuthenticatedHubGamesPingPongRoute =
   AuthenticatedHubGamesPingPongRouteImport.update({
     id: '/games/ping-pong',
     path: '/games/ping-pong',
+    getParentRoute: () => AuthenticatedHubRoute,
+  } as any)
+const AuthenticatedHubGamesPaintAndGuessRoute =
+  AuthenticatedHubGamesPaintAndGuessRouteImport.update({
+    id: '/games/paint-and-guess',
+    path: '/games/paint-and-guess',
+    getParentRoute: () => AuthenticatedHubRoute,
+  } as any)
+const AuthenticatedHubGamesChessRoute =
+  AuthenticatedHubGamesChessRouteImport.update({
+    id: '/games/chess',
+    path: '/games/chess',
+    getParentRoute: () => AuthenticatedHubRoute,
+  } as any)
+const AuthenticatedHubGamesSlugRoute =
+  AuthenticatedHubGamesSlugRouteImport.update({
+    id: '/games/$slug',
+    path: '/games/$slug',
     getParentRoute: () => AuthenticatedHubRoute,
   } as any)
 
@@ -89,7 +117,11 @@ export interface FileRoutesByFullPath {
   '/hub/profile': typeof AuthenticatedHubProfileRoute
   '/hub/': typeof AuthenticatedHubIndexRoute
   '/hub/games/$slug': typeof AuthenticatedHubGamesSlugRoute
+  '/hub/games/chess': typeof AuthenticatedHubGamesChessRoute
+  '/hub/games/paint-and-guess': typeof AuthenticatedHubGamesPaintAndGuessRoute
   '/hub/games/ping-pong': typeof AuthenticatedHubGamesPingPongRoute
+  '/hub/games/semantic': typeof AuthenticatedHubGamesSemanticRoute
+  '/hub/games/trivia-blitz': typeof AuthenticatedHubGamesTriviaBlitzRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -100,7 +132,11 @@ export interface FileRoutesByTo {
   '/hub/profile': typeof AuthenticatedHubProfileRoute
   '/hub': typeof AuthenticatedHubIndexRoute
   '/hub/games/$slug': typeof AuthenticatedHubGamesSlugRoute
+  '/hub/games/chess': typeof AuthenticatedHubGamesChessRoute
+  '/hub/games/paint-and-guess': typeof AuthenticatedHubGamesPaintAndGuessRoute
   '/hub/games/ping-pong': typeof AuthenticatedHubGamesPingPongRoute
+  '/hub/games/semantic': typeof AuthenticatedHubGamesSemanticRoute
+  '/hub/games/trivia-blitz': typeof AuthenticatedHubGamesTriviaBlitzRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -114,7 +150,11 @@ export interface FileRoutesById {
   '/_authenticated/hub/profile': typeof AuthenticatedHubProfileRoute
   '/_authenticated/hub/': typeof AuthenticatedHubIndexRoute
   '/_authenticated/hub/games/$slug': typeof AuthenticatedHubGamesSlugRoute
+  '/_authenticated/hub/games/chess': typeof AuthenticatedHubGamesChessRoute
+  '/_authenticated/hub/games/paint-and-guess': typeof AuthenticatedHubGamesPaintAndGuessRoute
   '/_authenticated/hub/games/ping-pong': typeof AuthenticatedHubGamesPingPongRoute
+  '/_authenticated/hub/games/semantic': typeof AuthenticatedHubGamesSemanticRoute
+  '/_authenticated/hub/games/trivia-blitz': typeof AuthenticatedHubGamesTriviaBlitzRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -128,7 +168,11 @@ export interface FileRouteTypes {
     | '/hub/profile'
     | '/hub/'
     | '/hub/games/$slug'
+    | '/hub/games/chess'
+    | '/hub/games/paint-and-guess'
     | '/hub/games/ping-pong'
+    | '/hub/games/semantic'
+    | '/hub/games/trivia-blitz'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -139,7 +183,11 @@ export interface FileRouteTypes {
     | '/hub/profile'
     | '/hub'
     | '/hub/games/$slug'
+    | '/hub/games/chess'
+    | '/hub/games/paint-and-guess'
     | '/hub/games/ping-pong'
+    | '/hub/games/semantic'
+    | '/hub/games/trivia-blitz'
   id:
     | '__root__'
     | '/'
@@ -152,7 +200,11 @@ export interface FileRouteTypes {
     | '/_authenticated/hub/profile'
     | '/_authenticated/hub/'
     | '/_authenticated/hub/games/$slug'
+    | '/_authenticated/hub/games/chess'
+    | '/_authenticated/hub/games/paint-and-guess'
     | '/_authenticated/hub/games/ping-pong'
+    | '/_authenticated/hub/games/semantic'
+    | '/_authenticated/hub/games/trivia-blitz'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -227,11 +279,18 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedHubLeaderboardRouteImport
       parentRoute: typeof AuthenticatedHubRoute
     }
-    '/_authenticated/hub/games/$slug': {
-      id: '/_authenticated/hub/games/$slug'
-      path: '/games/$slug'
-      fullPath: '/hub/games/$slug'
-      preLoaderRoute: typeof AuthenticatedHubGamesSlugRouteImport
+    '/_authenticated/hub/games/trivia-blitz': {
+      id: '/_authenticated/hub/games/trivia-blitz'
+      path: '/games/trivia-blitz'
+      fullPath: '/hub/games/trivia-blitz'
+      preLoaderRoute: typeof AuthenticatedHubGamesTriviaBlitzRouteImport
+      parentRoute: typeof AuthenticatedHubRoute
+    }
+    '/_authenticated/hub/games/semantic': {
+      id: '/_authenticated/hub/games/semantic'
+      path: '/games/semantic'
+      fullPath: '/hub/games/semantic'
+      preLoaderRoute: typeof AuthenticatedHubGamesSemanticRouteImport
       parentRoute: typeof AuthenticatedHubRoute
     }
     '/_authenticated/hub/games/ping-pong': {
@@ -239,6 +298,27 @@ declare module '@tanstack/react-router' {
       path: '/games/ping-pong'
       fullPath: '/hub/games/ping-pong'
       preLoaderRoute: typeof AuthenticatedHubGamesPingPongRouteImport
+      parentRoute: typeof AuthenticatedHubRoute
+    }
+    '/_authenticated/hub/games/paint-and-guess': {
+      id: '/_authenticated/hub/games/paint-and-guess'
+      path: '/games/paint-and-guess'
+      fullPath: '/hub/games/paint-and-guess'
+      preLoaderRoute: typeof AuthenticatedHubGamesPaintAndGuessRouteImport
+      parentRoute: typeof AuthenticatedHubRoute
+    }
+    '/_authenticated/hub/games/chess': {
+      id: '/_authenticated/hub/games/chess'
+      path: '/games/chess'
+      fullPath: '/hub/games/chess'
+      preLoaderRoute: typeof AuthenticatedHubGamesChessRouteImport
+      parentRoute: typeof AuthenticatedHubRoute
+    }
+    '/_authenticated/hub/games/$slug': {
+      id: '/_authenticated/hub/games/$slug'
+      path: '/games/$slug'
+      fullPath: '/hub/games/$slug'
+      preLoaderRoute: typeof AuthenticatedHubGamesSlugRouteImport
       parentRoute: typeof AuthenticatedHubRoute
     }
   }
@@ -249,7 +329,11 @@ interface AuthenticatedHubRouteChildren {
   AuthenticatedHubProfileRoute: typeof AuthenticatedHubProfileRoute
   AuthenticatedHubIndexRoute: typeof AuthenticatedHubIndexRoute
   AuthenticatedHubGamesSlugRoute: typeof AuthenticatedHubGamesSlugRoute
+  AuthenticatedHubGamesChessRoute: typeof AuthenticatedHubGamesChessRoute
+  AuthenticatedHubGamesPaintAndGuessRoute: typeof AuthenticatedHubGamesPaintAndGuessRoute
   AuthenticatedHubGamesPingPongRoute: typeof AuthenticatedHubGamesPingPongRoute
+  AuthenticatedHubGamesSemanticRoute: typeof AuthenticatedHubGamesSemanticRoute
+  AuthenticatedHubGamesTriviaBlitzRoute: typeof AuthenticatedHubGamesTriviaBlitzRoute
 }
 
 const AuthenticatedHubRouteChildren: AuthenticatedHubRouteChildren = {
@@ -257,7 +341,12 @@ const AuthenticatedHubRouteChildren: AuthenticatedHubRouteChildren = {
   AuthenticatedHubProfileRoute: AuthenticatedHubProfileRoute,
   AuthenticatedHubIndexRoute: AuthenticatedHubIndexRoute,
   AuthenticatedHubGamesSlugRoute: AuthenticatedHubGamesSlugRoute,
+  AuthenticatedHubGamesChessRoute: AuthenticatedHubGamesChessRoute,
+  AuthenticatedHubGamesPaintAndGuessRoute:
+    AuthenticatedHubGamesPaintAndGuessRoute,
   AuthenticatedHubGamesPingPongRoute: AuthenticatedHubGamesPingPongRoute,
+  AuthenticatedHubGamesSemanticRoute: AuthenticatedHubGamesSemanticRoute,
+  AuthenticatedHubGamesTriviaBlitzRoute: AuthenticatedHubGamesTriviaBlitzRoute,
 }
 
 const AuthenticatedHubRouteWithChildren =

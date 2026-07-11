@@ -11,8 +11,8 @@ interface UseCanvasDrawingOptions {
   brushSize: number;
   brushOpacity: number;
   brushHardness: number;
-  sendDrawingEvent: (event: { type: string; data: any }) => void;
-  isCanvasValid: (canvas: FabricCanvas | null) => boolean;
+  sendDrawingEvent: (event: { type: string; data?: any; [key: string]: any }) => void;
+  isCanvasValid: (canvas: FabricCanvas | null) => canvas is FabricCanvas;
   isReceivingRef: React.MutableRefObject<boolean>;
 }
 
@@ -59,26 +59,28 @@ export function useCanvasDrawing({
   // Update drawing mode when role or game state changes
   useEffect(() => {
     if (!isCanvasValid(fabricCanvas)) return;
+    const canvas = fabricCanvas;
     
-    fabricCanvas.isDrawingMode = isGameActive && isDrawer;
+    canvas.isDrawingMode = isGameActive && isDrawer;
     
     // Disable all interactions for guessers
     if (!isDrawer) {
-      fabricCanvas.selection = false;
-      fabricCanvas.defaultCursor = 'default';
-      fabricCanvas.hoverCursor = 'default';
-      fabricCanvas.moveCursor = 'default';
-      fabricCanvas.skipTargetFind = true;
+      canvas.selection = false;
+      canvas.defaultCursor = 'default';
+      canvas.hoverCursor = 'default';
+      canvas.moveCursor = 'default';
+      canvas.skipTargetFind = true;
     } else {
       // Enable interactions for drawer
-      fabricCanvas.selection = true;
-      fabricCanvas.skipTargetFind = false;
+      canvas.selection = true;
+      canvas.skipTargetFind = false;
     }
   }, [fabricCanvas, isDrawer, isGameActive, isCanvasValid]);
 
   // Send drawing events (drawer only) - Real-time streaming
   useEffect(() => {
     if (!isCanvasValid(fabricCanvas) || !isDrawer || !isGameActive) return;
+    const canvas = fabricCanvas;
 
     let isDrawing = false;
     let currentPathId: string | null = null;
@@ -99,7 +101,7 @@ export function useCanvasDrawing({
     // Handle path completion (finalize)
     const handlePathCreated = (e: { path: FabricObject }) => {
       if (isReceivingRef.current) return; // Prevent echo
-      if (!isCanvasValid(fabricCanvas)) return;
+      if (!isCanvasValid(canvas)) return;
 
       const path = e.path;
       
@@ -146,8 +148,8 @@ export function useCanvasDrawing({
           data: {
             newPoints: remainingPoints,
             startIndex: lastSentPointIndex,
-            stroke: fabricCanvas.freeDrawingBrush.color,
-            strokeWidth: fabricCanvas.freeDrawingBrush.width,
+            stroke: canvas.freeDrawingBrush?.color,
+            strokeWidth: canvas.freeDrawingBrush?.width,
             opacity: activeTool === "erase" ? 1 : brushOpacity,
             hardness: activeTool === "erase" ? 1 : brushHardness,
           },
@@ -174,13 +176,13 @@ export function useCanvasDrawing({
     const handleMouseMove = (options: any) => {
       // Only check isDrawing flag - don't check isDrawingMode as it might be
       // temporarily disabled during certain operations, but we're still drawing
-      if (!isDrawing || !fabricCanvas) return;
+      if (!isDrawing) return;
       // Don't check options.e.buttons - it can become unreliable during long strokes
       // Don't check isDrawingMode - it might be temporarily disabled but drawing continues
       // Instead, rely on the isDrawing flag set by mouse:down/mouse:up
       
       try {
-        const pointer = fabricCanvas.getPointer(options.e);
+        const pointer = canvas.getPointer(options.e);
         pathPoints.push([pointer.x, pointer.y]);
 
         const now = Date.now();
@@ -207,8 +209,8 @@ export function useCanvasDrawing({
           const pathData = {
             newPoints: newPoints, // Only new points since last update
             startIndex: lastSentPointIndex, // Where these points start in the full path
-            stroke: fabricCanvas.freeDrawingBrush.color,
-            strokeWidth: fabricCanvas.freeDrawingBrush.width,
+            stroke: canvas.freeDrawingBrush?.color,
+            strokeWidth: canvas.freeDrawingBrush?.width,
             opacity: activeTool === "erase" ? 1 : brushOpacity,
             hardness: activeTool === "erase" ? 1 : brushHardness,
           };
@@ -232,7 +234,7 @@ export function useCanvasDrawing({
 
     // Handle drawing start
     const handleMouseDown = (options: any) => {
-      if (!fabricCanvas?.isDrawingMode) return;
+      if (!canvas.isDrawingMode) return;
       if (isReceivingRef.current) return;
 
       // Ensure we're not already drawing (safety check)
@@ -275,8 +277,8 @@ export function useCanvasDrawing({
               data: {
                 newPoints: pendingPoints,
                 startIndex: lastSentPointIndex,
-                stroke: fabricCanvas.freeDrawingBrush.color,
-                strokeWidth: fabricCanvas.freeDrawingBrush.width,
+                stroke: canvas.freeDrawingBrush?.color,
+                strokeWidth: canvas.freeDrawingBrush?.width,
                 opacity: activeTool === "erase" ? 1 : brushOpacity,
                 hardness: activeTool === "erase" ? 1 : brushHardness,
               },
@@ -292,8 +294,8 @@ export function useCanvasDrawing({
         type: "path-start",
         pathId: currentPathId,
         sequence: ++drawerEventSequence,
-        color: fabricCanvas.freeDrawingBrush.color,
-        width: fabricCanvas.freeDrawingBrush.width,
+        color: canvas.freeDrawingBrush?.color,
+        width: canvas.freeDrawingBrush?.width,
         opacity: activeTool === "erase" ? 1 : brushOpacity,
         hardness: activeTool === "erase" ? 1 : brushHardness,
       });
@@ -317,8 +319,8 @@ export function useCanvasDrawing({
             data: {
               newPoints: remainingPoints,
               startIndex: lastSentPointIndex,
-              stroke: fabricCanvas.freeDrawingBrush.color,
-              strokeWidth: fabricCanvas.freeDrawingBrush.width,
+              stroke: canvas.freeDrawingBrush?.color,
+              strokeWidth: canvas.freeDrawingBrush?.width,
               opacity: activeTool === "erase" ? 1 : brushOpacity,
               hardness: activeTool === "erase" ? 1 : brushHardness,
             },
@@ -335,10 +337,10 @@ export function useCanvasDrawing({
       }
     };
 
-    fabricCanvas.on("path:created", handlePathCreated);
-    fabricCanvas.on("mouse:down", handleMouseDown);
-    fabricCanvas.on("mouse:move", handleMouseMove);
-    fabricCanvas.on("mouse:up", handleMouseUp);
+    canvas.on("path:created", handlePathCreated);
+    canvas.on("mouse:down", handleMouseDown);
+    canvas.on("mouse:move", handleMouseMove);
+    canvas.on("mouse:up", handleMouseUp);
 
     return () => {
       // Clean up flush interval
@@ -346,11 +348,11 @@ export function useCanvasDrawing({
         clearInterval(flushInterval);
         flushInterval = null;
       }
-      if (isCanvasValid(fabricCanvas)) {
-        fabricCanvas.off("path:created", handlePathCreated);
-        fabricCanvas.off("mouse:down", handleMouseDown);
-        fabricCanvas.off("mouse:move", handleMouseMove);
-        fabricCanvas.off("mouse:up", handleMouseUp);
+      if (isCanvasValid(canvas)) {
+        canvas.off("path:created", handlePathCreated);
+        canvas.off("mouse:down", handleMouseDown);
+        canvas.off("mouse:move", handleMouseMove);
+        canvas.off("mouse:up", handleMouseUp);
       }
     };
   }, [fabricCanvas, isDrawer, isGameActive, sendDrawingEvent, isCanvasValid, isReceivingRef, activeTool, brushOpacity, brushHardness]);
@@ -358,11 +360,12 @@ export function useCanvasDrawing({
   // Undo handler
   const handleUndo = () => {
     if (!isCanvasValid(fabricCanvas) || !isDrawer) return;
+    const canvas = fabricCanvas;
     try {
-      const objects = fabricCanvas.getObjects();
+      const objects = canvas.getObjects();
       if (objects.length > 0) {
-        fabricCanvas.remove(objects[objects.length - 1]);
-        fabricCanvas.renderAll();
+        canvas.remove(objects[objects.length - 1]);
+        canvas.renderAll();
         toast.info("Undo");
       }
     } catch (error) {
@@ -373,10 +376,11 @@ export function useCanvasDrawing({
   // Clear handler
   const handleClear = (clearCanvas: () => void) => {
     if (!isCanvasValid(fabricCanvas) || !isDrawer) return;
+    const canvas = fabricCanvas;
     try {
-      fabricCanvas.clear();
-      fabricCanvas.backgroundColor = "#ffffff";
-      fabricCanvas.renderAll();
+      canvas.clear();
+      canvas.backgroundColor = "#ffffff";
+      canvas.renderAll();
       clearCanvas();
       toast.success("Canvas cleared!");
     } catch (error) {

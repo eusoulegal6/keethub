@@ -85,7 +85,7 @@ interface GameContextType {
   
   // Actions
   joinRoom: (roomId: string, playerName: string, avatar?: string | AvatarConfig) => void;
-  createRoom: (roomName: string, isPublic?: boolean) => Promise<string>;
+  createRoom: (roomName: string, isPublic?: boolean, wordPack?: string) => Promise<string>;
   leaveRoom: () => void;
   startGame: () => void;
   setReadyState: (isReady: boolean) => void;
@@ -213,12 +213,9 @@ export function GameProvider({ children }: { children: ReactNode }) {
           setStoredPlayerId(nextRoomId, prev.selfId);
         }
         
-        // Determine phase from isGameActive
+        // Determine phase from isGameActive. Room snapshots only represent lobby/drawing;
+        // round-ended and game-ended arrive through their dedicated socket events.
         const phase: GamePhase = isGameActive ? "drawing" : "lobby";
-        
-        // Clear round-end state (revealedWord, winner) when not in round-ended or game-ended phase
-        // This prevents stale round-end data from persisting when joining a new room or resetting state
-        const shouldClearRoundEndState = phase !== "round-ended" && phase !== "game-ended";
         
         return {
           ...prev,
@@ -230,10 +227,10 @@ export function GameProvider({ children }: { children: ReactNode }) {
             number: roundNumber ?? prev.round.number,
             drawer: currentDrawer ?? prev.round.drawer,
             word: currentWord ?? prev.round.word,
-            revealedWord: shouldClearRoundEndState ? null : prev.round.revealedWord,
+            revealedWord: null,
             timeLeft: timeLeft ?? prev.round.timeLeft,
             roundTime: roundTime ?? prev.round.roundTime,
-            winner: shouldClearRoundEndState ? null : prev.round.winner,
+            winner: null,
           },
         };
       });
