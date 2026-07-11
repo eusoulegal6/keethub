@@ -67,7 +67,14 @@ function ProfilePage() {
 
   const mutate = useMutation({
     mutationFn: (values: z.infer<typeof schema>) =>
-      updateFn({ data: { username: values.username } }),
+      updateFn({
+        data: {
+          username: values.username,
+          avatar_config: profile?.avatar_config != null
+            ? (profile.avatar_config as Record<string, unknown>)
+            : undefined,
+        },
+      }),
     onSuccess: () => {
       toast.success("Profile updated");
       queryClient.invalidateQueries({ queryKey: ["me"] });
