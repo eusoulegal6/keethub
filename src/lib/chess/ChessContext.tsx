@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useCallback, useMemo, useRef, useEffect } from "react";
-import { Chess } from "chess.js";
+import { Chess, type Square } from "chess.js";
 import type { GameState, GameMode, ChessMove, GameStatus, AIConfig, Side, ChessContextType } from "./types";
 import { stockfishEngine, type EngineCallback } from "./StockfishEngine";
 
@@ -134,7 +134,7 @@ export function ChessProvider({ children }: { children: React.ReactNode }) {
 
   const getLegalMoves = useCallback(
     (square?: string): string[] => {
-      try { return gameRef.current.moves({ square, verbose: true }).map((m) => m.to); } catch { return []; }
+      try { return gameRef.current.moves({ square: square as Square | undefined, verbose: true }).map((m) => m.to); } catch { return []; }
     },
     [],
   );

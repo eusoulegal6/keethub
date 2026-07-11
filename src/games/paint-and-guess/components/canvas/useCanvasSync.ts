@@ -445,13 +445,14 @@ export function useCanvasSync({
 
             // Use enlivenObjects for final path (this is the complete, optimized path)
             // fabric.util is accessed from the fabric namespace
-            fabric.util.enlivenObjects([pending.event.data]).then((objects: FabricObject[]) => {
+            fabric.util.enlivenObjects([pending.event.data]).then((objects) => {
+            const fabricObjects = objects as FabricObject[];
             if (!isCanvasValid(fabricCanvas)) {
               isReceivingRef.current = false;
               return;
             }
             
-            objects.forEach((obj) => {
+            fabricObjects.forEach((obj) => {
               obj.selectable = false;
               obj.evented = false;
               obj.hoverCursor = 'default';
@@ -519,13 +520,14 @@ export function useCanvasSync({
         
         try {
           // fabric.util is accessed from the fabric namespace
-          fabric.util.enlivenObjects([event.data]).then((objects: FabricObject[]) => {
+          fabric.util.enlivenObjects([event.data]).then((objects) => {
+            const fabricObjects = objects as FabricObject[];
             if (!isCanvasValid(fabricCanvas)) {
               isReceivingRef.current = false;
               return;
             }
             
-            objects.forEach((obj) => {
+            fabricObjects.forEach((obj) => {
               obj.selectable = false;
               obj.evented = false;
               obj.hoverCursor = 'default';

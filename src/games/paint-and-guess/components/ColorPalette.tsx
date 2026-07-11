@@ -287,7 +287,7 @@ export const ColorPalette = ({ activeColor, onColorChange }: ColorPaletteProps) 
                   <div className="space-y-3">
                     <HexColorPicker
                       color={customColor}
-                      onChange={(color) => {
+                      onChange={(color: string) => {
                         setCustomColor(color);
                         if (isValidHexColor(color)) {
                           onColorChange(color);

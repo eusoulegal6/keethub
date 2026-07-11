@@ -15,6 +15,7 @@ import { ChessProvider, useChess } from "@/lib/chess/ChessContext";
 import { ChessBoard } from "@/lib/chess/ChessBoard";
 import { GameInfo } from "@/lib/chess/GameInfo";
 import { PuzzleProvider, usePuzzle } from "@/lib/chess/PuzzleContext";
+import type { Puzzle as ChessPuzzle } from "@/lib/chess/types";
 import { PUZZLES } from "@/lib/chess/puzzles";
 import { OPPONENTS, CATEGORY_LABELS, getOpponentById, type Opponent } from "@/lib/chess/opponents";
 import { LOCAL_GAMES } from "@/lib/local-games";
@@ -342,7 +343,7 @@ function PlayTab({ gameId, accent }: { gameId: string; accent: string }) {
 
 function PuzzlesTab() {
   const p = usePuzzle();
-  const [difficulty, setDifficulty] = useState<Puzzle["difficulty"] | undefined>();
+  const [difficulty, setDifficulty] = useState<ChessPuzzle["difficulty"] | undefined>();
 
   // Load first puzzle on mount
   useEffect(() => {

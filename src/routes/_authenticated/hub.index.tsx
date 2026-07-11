@@ -118,13 +118,8 @@ function LibraryPage() {
 function GameCard({ game }: { game: Game }) {
   const accent = game.accent_color ?? "#a78bfa";
   const route = PORTED_ROUTES[game.slug];
-  return (
-    <Link
-      {...(route
-        ? { to: route as any }
-        : { to: "/hub/games/$slug" as const, params: { slug: game.slug } })}
-      className="group rounded-2xl overflow-hidden border border-border bg-game-card hover:border-primary/50 transition-all hover:-translate-y-1"
-    >
+  const content = (
+    <>
       <div
         className="aspect-video relative flex items-end p-4"
         style={{
@@ -150,6 +145,27 @@ function GameCard({ game }: { game: Game }) {
           {game.description}
         </p>
       </div>
+    </>
+  );
+
+  if (route) {
+    return (
+      <Link
+        to={route as any}
+        className="group rounded-2xl overflow-hidden border border-border bg-game-card hover:border-primary/50 transition-all hover:-translate-y-1"
+      >
+        {content}
+      </Link>
+    );
+  }
+
+  return (
+    <Link
+      to="/hub/games/$slug"
+      params={{ slug: game.slug } as any}
+      className="group rounded-2xl overflow-hidden border border-border bg-game-card hover:border-primary/50 transition-all hover:-translate-y-1"
+    >
+      {content}
     </Link>
   );
 }
