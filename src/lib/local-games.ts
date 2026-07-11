@@ -41,6 +41,21 @@ export const LOCAL_GAMES: LocalGame[] = [
     },
   },
   {
+    slug: "semantic",
+    route: "/hub/games/semantic",
+    data: {
+      id: localId("semantic"),
+      slug: "semantic",
+      title: "Semantic",
+      description: "Guess the secret word by entering semantically similar words. Each guess gets a rank — the closer to #1, the hotter you are!",
+      category: "puzzle",
+      thumbnail_url: null,
+      accent_color: "#22c55e",
+      is_active: true,
+      created_at: new Date().toISOString(),
+    },
+  },
+  {
     slug: "chess",
     route: "/hub/games/chess",
     data: {
