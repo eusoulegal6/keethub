@@ -1,25 +1,21 @@
 import { useEffect } from "react";
-import { useParams, useNavigate } from "@tanstack/react-router";
-import { useGame } from "@/hub/games/paint-and-guess";
-import { GameHeader } from "@/hub/games/paint-and-guess/components/GameHeader";
-import { RoundSummary } from "@/hub/games/paint-and-guess/components/RoundSummary";
-import { LobbyStage } from "@/hub/games/paint-and-guess/components/LobbyStage";
-import { GameStage } from "@/hub/games/paint-and-guess/components/GameStage";
+import { useGame } from "@/games/paint-and-guess";
+import { GameHeader } from "@/games/paint-and-guess/components/GameHeader";
+import { RoundSummary } from "@/games/paint-and-guess/components/RoundSummary";
+import { LobbyStage } from "@/games/paint-and-guess/components/LobbyStage";
+import { GameStage } from "@/games/paint-and-guess/components/GameStage";
 import { Card } from "@/components/ui/card";
 import { toast } from "sonner";
 import { AvatarConfig } from "@/lib/avatar/config";
 
-export default function Room() {
-  const { roomId } = useParams({ strict: false }) as { roomId?: string };
-  const navigate = useNavigate();
+export default function Room({ onBack }: { onBack: () => void }) {
   const { gameState, isGameActive, leaveRoom, startGame, isConnected, setReadyState, updateAvatar } = useGame();
 
   useEffect(() => {
     if (!isConnected) {
-      navigate({ to: "/hub/games/paint-and-guess" });
-      return;
+      onBack();
     }
-  }, [isConnected, navigate]);
+  }, [isConnected, onBack]);
 
   // Listen for avatar updates from HubLayout sidebar
   useEffect(() => {
@@ -36,7 +32,7 @@ export default function Room() {
 
   const handleLeaveRoom = () => {
     leaveRoom();
-    navigate({ to: "/hub/games/paint-and-guess" });
+    onBack();
     toast.info("Left room");
   };
 

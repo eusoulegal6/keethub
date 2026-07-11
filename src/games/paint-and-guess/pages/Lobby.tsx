@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "@tanstack/react-router";
+// Navigation handled by parent via onEnterRoom callback
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -19,8 +19,7 @@ interface WordPack {
   wordCount: number;
 }
 
-export default function Lobby() {
-  const navigate = useNavigate();
+export default function Lobby({ onEnterRoom }: { onEnterRoom: () => void }) {
   const { createRoom, joinRoom, isConnected } = useGame();
   const [roomId, setRoomId] = useState("");
   const [playerName, setPlayerName] = useState("");
@@ -75,7 +74,7 @@ export default function Lobby() {
     try {
       const newRoomId = await createRoom(roomName, true, selectedWordPack);
       joinRoom(newRoomId, playerName, latestAvatar);
-      navigate({ to: "/hub/games/paint-and-guess/room/$roomId", params: { roomId: newRoomId } });
+      onEnterRoom();
       toast.success("Room created!");
     } catch (error) {
       toast.error("Failed to create room");
@@ -99,7 +98,7 @@ export default function Lobby() {
     setIsJoining(true);
     try {
       joinRoom(roomId.toUpperCase(), playerName, latestAvatar);
-      navigate({ to: "/hub/games/paint-and-guess/room/$roomId", params: { roomId: roomId.toUpperCase() } });
+      onEnterRoom();
       toast.success("Joined room!");
     } catch (error) {
       toast.error("Failed to join room");
