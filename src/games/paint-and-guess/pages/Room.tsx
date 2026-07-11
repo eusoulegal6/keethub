@@ -9,13 +9,7 @@ import { toast } from "sonner";
 import { AvatarConfig } from "@/lib/avatar/config";
 
 export default function Room({ onBack }: { onBack: () => void }) {
-  const { gameState, isGameActive, leaveRoom, startGame, isConnected, setReadyState, updateAvatar } = useGame();
-
-  useEffect(() => {
-    if (!isConnected) {
-      onBack();
-    }
-  }, [isConnected, onBack]);
+  const { gameState, isGameActive, leaveRoom, startGame, setReadyState, updateAvatar } = useGame();
 
   // Listen for avatar updates from HubLayout sidebar
   useEffect(() => {

@@ -1,5 +1,4 @@
 import { useState, useEffect } from "react";
-// Navigation handled by parent via onEnterRoom callback
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -8,24 +7,13 @@ import { toast } from "sonner";
 import { Users, Plus, LogIn } from "lucide-react";
 import { AvatarConfig, createDefaultAvatarConfig } from "@/lib/avatar/config";
 import { safeLoadAvatarConfig } from "@/lib/avatar/validation";
-import { cn } from "@/lib/utils";
-import { apiPath } from "@/games/paint-and-guess/config";
-
-interface WordPack {
-  id: string;
-  name: string;
-  description: string;
-  icon: string;
-  wordCount: number;
-}
+import { supabase } from "@/integrations/supabase/client";
 
 export default function Lobby({ onEnterRoom }: { onEnterRoom: () => void }) {
-  const { createRoom, joinRoom, isConnected, socket } = useGame();
-  const [roomId, setRoomId] = useState("");
+  const { createRoom, joinRoom } = useGame();
+  const [gamePin, setGamePin] = useState("");
   const [playerName, setPlayerName] = useState("");
   const [roomName, setRoomName] = useState("");
-  const [selectedWordPack, setSelectedWordPack] = useState<string>("classic");
-  const [wordPacks, setWordPacks] = useState<WordPack[]>([]);
   const [avatarConfig, setAvatarConfig] = useState<AvatarConfig>(() => {
     return safeLoadAvatarConfig() || createDefaultAvatarConfig();
   });
@@ -33,29 +21,23 @@ export default function Lobby({ onEnterRoom }: { onEnterRoom: () => void }) {
   const [isJoining, setIsJoining] = useState(false);
 
   useEffect(() => {
-    // Fetch available word packs
-    fetch(apiPath("/api/word-packs"))
-      .then((res) => res.json())
-      .then((packs: WordPack[]) => {
-        setWordPacks(packs);
-      })
-      .catch((error) => {
-        console.error("Failed to fetch word packs:", error);
-      });
-  }, []);
-
-  useEffect(() => {
     const handleAvatarUpdate = (event: Event) => {
       const detail = (event as CustomEvent<AvatarConfig>).detail;
-      if (detail) {
-        setAvatarConfig(detail);
-      }
+      if (detail) setAvatarConfig(detail);
     };
-
     window.addEventListener("avatar-config-updated", handleAvatarUpdate as EventListener);
-    return () => {
-      window.removeEventListener("avatar-config-updated", handleAvatarUpdate as EventListener);
-    };
+    return () => window.removeEventListener("avatar-config-updated", handleAvatarUpdate as EventListener);
+  }, []);
+
+  // Auto-fill player name from Supabase profile
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => {
+      if (data.user) {
+        supabase.from("profiles").select("username").eq("id", data.user.id).single().then(({ data: profile }) => {
+          if (profile?.username) setPlayerName(profile.username);
+        });
+      }
+    });
   }, []);
 
   const handleCreateRoom = async () => {
@@ -68,36 +50,46 @@ export default function Lobby({ onEnterRoom }: { onEnterRoom: () => void }) {
       return;
     }
 
-    const latestAvatar = safeLoadAvatarConfig() || avatarConfig || createDefaultAvatarConfig();
-    setAvatarConfig(latestAvatar);
     setIsCreating(true);
     try {
-      const newRoomId = await createRoom(roomName, true, selectedWordPack);
-      joinRoom(newRoomId, playerName, latestAvatar);
+      const newRoomId = await createRoom(roomName, true, "classic");
+
+      // Join the room as first player
+      joinRoom(newRoomId, playerName);
       onEnterRoom();
       toast.success("Room created!");
     } catch (error) {
-      toast.error("Failed to create room");
+      toast.error("Failed to create room. Is the game database set up?");
     } finally {
       setIsCreating(false);
     }
   };
 
-  const handleJoinRoom = () => {
+  const handleJoinRoom = async () => {
     if (!playerName.trim()) {
       toast.error("Please enter your name");
       return;
     }
-    if (!roomId.trim()) {
-      toast.error("Please enter a room ID");
+    if (!gamePin.trim()) {
+      toast.error("Please enter a game PIN");
       return;
     }
 
-    const latestAvatar = safeLoadAvatarConfig() || avatarConfig || createDefaultAvatarConfig();
-    setAvatarConfig(latestAvatar);
     setIsJoining(true);
     try {
-      joinRoom(roomId.toUpperCase(), playerName, latestAvatar);
+      const pin = gamePin.toUpperCase().trim();
+      const { data, error } = await supabase.rpc("join_paint_room", {
+        game_pin: pin,
+      });
+
+      if (error || !(data as any)?.success) {
+        toast.error((data as any)?.error || "Invalid game PIN");
+        setIsJoining(false);
+        return;
+      }
+
+      const result = data as any;
+      joinRoom(result.roomId, playerName);
       onEnterRoom();
       toast.success("Joined room!");
     } catch (error) {
@@ -107,38 +99,12 @@ export default function Lobby({ onEnterRoom }: { onEnterRoom: () => void }) {
     }
   };
 
-  if (!isConnected) {
-    const showRetry = socket?.disconnected === true;
-
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center p-4">
-        <Card className="max-w-sm w-full text-center">
-          <CardHeader>
-            <CardTitle>
-              {showRetry ? "Server Unreachable" : "Connecting..."}
-            </CardTitle>
-            <CardDescription>
-              {showRetry
-                ? "The game server appears to be offline or waking up. Render free-tier servers can take up to 60 seconds to start."
-                : "Please wait while we connect to the server..."}
-            </CardDescription>
-          </CardHeader>
-          {showRetry && (
-            <CardContent>
-              <Button onClick={() => socket?.connect()}>Retry Connection</Button>
-            </CardContent>
-          )}
-        </Card>
-      </div>
-    );
-  }
-
   return (
     <div className="min-h-screen bg-background flex items-center justify-center p-4">
       <div className="w-full max-w-2xl space-y-6">
         <Card>
           <CardHeader>
-            <CardTitle className="text-2xl">Multiplayer Draw & Guess</CardTitle>
+            <CardTitle className="text-2xl">Multiplayer Draw &amp; Guess</CardTitle>
             <CardDescription>Create or join a room to start playing</CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
@@ -153,104 +119,69 @@ export default function Lobby({ onEnterRoom }: { onEnterRoom: () => void }) {
             </div>
 
             <div className="rounded-lg border border-dashed p-3 text-sm text-muted-foreground">
-              Customize your avatar from the left sidebar before creating or joining a room.
+              Customize your avatar from your profile page before creating or joining a room.
             </div>
 
             <div className="grid md:grid-cols-2 gap-4">
-                  {/* Create Room */}
-                  <Card>
-                    <CardHeader>
-                      <CardTitle className="flex items-center gap-2">
-                        <Plus className="w-5 h-5" />
-                        Create Room
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
-                      <div className="space-y-2">
-                        <label className="text-sm font-medium">Room Name</label>
-                        <Input
-                          placeholder="Room name"
-                          value={roomName}
-                          onChange={(e) => setRoomName(e.target.value)}
-                          maxLength={30}
-                        />
-                      </div>
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Plus className="w-5 h-5" />
+                    Create Room
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Room Name</label>
+                    <Input
+                      placeholder="Room name"
+                      value={roomName}
+                      onChange={(e) => setRoomName(e.target.value)}
+                      maxLength={30}
+                    />
+                  </div>
+                  <Button
+                    onClick={handleCreateRoom}
+                    disabled={isCreating}
+                    className="w-full"
+                  >
+                    {isCreating ? "Creating..." : "Create Room"}
+                  </Button>
+                </CardContent>
+              </Card>
 
-                      <div className="space-y-2">
-                        <label className="text-sm font-medium">Word Pack</label>
-                        <div className="grid grid-cols-2 gap-2 max-h-64 overflow-y-auto p-1">
-                          {wordPacks.map((pack) => (
-                            <button
-                              key={pack.id}
-                              type="button"
-                              onClick={() => setSelectedWordPack(pack.id)}
-                              className={cn(
-                                "p-3 rounded-lg border-2 text-left transition-all hover:bg-accent",
-                                selectedWordPack === pack.id
-                                  ? "border-primary bg-primary/10"
-                                  : "border-border bg-card"
-                              )}
-                            >
-                              <div className="flex items-start gap-2">
-                                <span className="text-2xl">{pack.icon}</span>
-                                <div className="flex-1 min-w-0">
-                                  <div className="font-medium text-sm">{pack.name}</div>
-                                  <div className="text-xs text-muted-foreground line-clamp-1">
-                                    {pack.description}
-                                  </div>
-                                  <div className="text-xs text-muted-foreground mt-1">
-                                    {pack.wordCount} words
-                                  </div>
-                                </div>
-                              </div>
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-
-                      <Button
-                        onClick={handleCreateRoom}
-                        disabled={isCreating}
-                        className="w-full"
-                      >
-                        {isCreating ? "Creating..." : "Create Room"}
-                      </Button>
-                    </CardContent>
-                  </Card>
-
-                  {/* Join Room */}
-                  <Card>
-                    <CardHeader>
-                      <CardTitle className="flex items-center gap-2">
-                        <LogIn className="w-5 h-5" />
-                        Join Room
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
-                      <div className="space-y-2">
-                        <label className="text-sm font-medium">Room ID</label>
-                        <Input
-                          placeholder="Enter room ID"
-                          value={roomId}
-                          onChange={(e) => setRoomId(e.target.value.toUpperCase())}
-                          maxLength={6}
-                        />
-                      </div>
-                      <Button
-                        onClick={handleJoinRoom}
-                        disabled={isJoining}
-                        variant="outline"
-                        className="w-full"
-                      >
-                        {isJoining ? "Joining..." : "Join Room"}
-                      </Button>
-                    </CardContent>
-                  </Card>
-                </div>
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <LogIn className="w-5 h-5" />
+                    Join Room
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Game PIN</label>
+                    <Input
+                      placeholder="Enter 6-letter PIN"
+                      value={gamePin}
+                      onChange={(e) => setGamePin(e.target.value.toUpperCase())}
+                      maxLength={6}
+                    />
+                  </div>
+                  <Button
+                    onClick={handleJoinRoom}
+                    disabled={isJoining}
+                    variant="outline"
+                    className="w-full"
+                  >
+                    {isJoining ? "Joining..." : "Join Room"}
+                  </Button>
+                </CardContent>
+              </Card>
+            </div>
 
             <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
               <Users className="w-4 h-4" />
-              <span>Up to 6 players per room</span>
+              <span>Share the 6-letter PIN with friends to join</span>
             </div>
           </CardContent>
         </Card>
@@ -258,4 +189,3 @@ export default function Lobby({ onEnterRoom }: { onEnterRoom: () => void }) {
     </div>
   );
 }
-
