@@ -355,10 +355,17 @@ export function GameProvider({ children }: { children: ReactNode }) {
 
   const leaveRoom = useCallback(() => {
     if (gameState.roomId) {
-      supabase.rpc("leave_paint_room", {
-        room_id: gameState.roomId,
-      }).catch(() => {});
-      leaveRoomChannel(gameState.roomId);
+      const roomId = gameState.roomId;
+      void (async () => {
+        try {
+          await supabase.rpc("leave_paint_room", {
+            room_id: roomId,
+          });
+        } catch {
+          // Best-effort cleanup; local state is reset regardless.
+        }
+      })();
+      leaveRoomChannel(roomId);
     }
     setGameState(createInitialGameState());
     setChatMessages([]);

@@ -14,6 +14,231 @@ export type Database = {
   }
   public: {
     Tables: {
+      game_canvas_checkpoints: {
+        Row: {
+          created_at: string
+          fabric_json: Json
+          id: string
+          room_id: string
+          round_number: number
+        }
+        Insert: {
+          created_at?: string
+          fabric_json: Json
+          id?: string
+          room_id: string
+          round_number: number
+        }
+        Update: {
+          created_at?: string
+          fabric_json?: Json
+          id?: string
+          room_id?: string
+          round_number?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "game_canvas_checkpoints_room_id_fkey"
+            columns: ["room_id"]
+            isOneToOne: false
+            referencedRelation: "game_rooms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      game_room_players: {
+        Row: {
+          avatar: Json | null
+          created_at: string
+          has_guessed: boolean
+          id: string
+          is_connected: boolean
+          is_ready: boolean
+          name: string
+          room_id: string
+          score: number
+          user_id: string | null
+        }
+        Insert: {
+          avatar?: Json | null
+          created_at?: string
+          has_guessed?: boolean
+          id?: string
+          is_connected?: boolean
+          is_ready?: boolean
+          name: string
+          room_id: string
+          score?: number
+          user_id?: string | null
+        }
+        Update: {
+          avatar?: Json | null
+          created_at?: string
+          has_guessed?: boolean
+          id?: string
+          is_connected?: boolean
+          is_ready?: boolean
+          name?: string
+          room_id?: string
+          score?: number
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "game_room_players_room_id_fkey"
+            columns: ["room_id"]
+            isOneToOne: false
+            referencedRelation: "game_rooms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      game_rooms: {
+        Row: {
+          created_at: string
+          current_drawer_id: string | null
+          current_word_id: string | null
+          game_pin: string
+          id: string
+          is_game_active: boolean
+          last_activity_at: string
+          max_players: number
+          max_rounds: number
+          name: string
+          owner_id: string | null
+          round_deadline_at: string | null
+          round_number: number
+          round_time: number
+          updated_at: string
+          word_history: string[] | null
+          word_pack: string | null
+        }
+        Insert: {
+          created_at?: string
+          current_drawer_id?: string | null
+          current_word_id?: string | null
+          game_pin: string
+          id?: string
+          is_game_active?: boolean
+          last_activity_at?: string
+          max_players?: number
+          max_rounds?: number
+          name: string
+          owner_id?: string | null
+          round_deadline_at?: string | null
+          round_number?: number
+          round_time?: number
+          updated_at?: string
+          word_history?: string[] | null
+          word_pack?: string | null
+        }
+        Update: {
+          created_at?: string
+          current_drawer_id?: string | null
+          current_word_id?: string | null
+          game_pin?: string
+          id?: string
+          is_game_active?: boolean
+          last_activity_at?: string
+          max_players?: number
+          max_rounds?: number
+          name?: string
+          owner_id?: string | null
+          round_deadline_at?: string | null
+          round_number?: number
+          round_time?: number
+          updated_at?: string
+          word_history?: string[] | null
+          word_pack?: string | null
+        }
+        Relationships: []
+      }
+      game_round_secrets: {
+        Row: {
+          created_at: string
+          id: string
+          room_id: string
+          round_number: number
+          word: string
+          word_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          room_id: string
+          round_number: number
+          word: string
+          word_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          room_id?: string
+          round_number?: number
+          word?: string
+          word_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "game_round_secrets_room_id_fkey"
+            columns: ["room_id"]
+            isOneToOne: false
+            referencedRelation: "game_rooms"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "game_round_secrets_word_id_fkey"
+            columns: ["word_id"]
+            isOneToOne: false
+            referencedRelation: "game_words"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      game_rounds: {
+        Row: {
+          created_at: string
+          drawer_id: string
+          drawer_name: string
+          duration_ms: number
+          finished_by: string
+          id: string
+          room_id: string
+          round_number: number
+          word: string
+        }
+        Insert: {
+          created_at?: string
+          drawer_id: string
+          drawer_name: string
+          duration_ms: number
+          finished_by?: string
+          id?: string
+          room_id: string
+          round_number: number
+          word: string
+        }
+        Update: {
+          created_at?: string
+          drawer_id?: string
+          drawer_name?: string
+          duration_ms?: number
+          finished_by?: string
+          id?: string
+          room_id?: string
+          round_number?: number
+          word?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "game_rounds_room_id_fkey"
+            columns: ["room_id"]
+            isOneToOne: false
+            referencedRelation: "game_rooms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       game_scores: {
         Row: {
           created_at: string
@@ -48,6 +273,24 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      game_words: {
+        Row: {
+          id: string
+          pack: string
+          word: string
+        }
+        Insert: {
+          id?: string
+          pack: string
+          word: string
+        }
+        Update: {
+          id?: string
+          pack?: string
+          word?: string
+        }
+        Relationships: []
       }
       games: {
         Row: {
@@ -132,12 +375,46 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      advance_paint_round: { Args: { room_id: string }; Returns: Json }
+      all_guessers_finished: { Args: { room_id: string }; Returns: boolean }
+      create_paint_room: {
+        Args: {
+          max_players?: number
+          max_rounds?: number
+          room_name: string
+          round_time?: number
+          word_pack?: string
+        }
+        Returns: Json
+      }
+      generate_game_pin: { Args: never; Returns: string }
+      get_canvas_checkpoint: {
+        Args: { room_id: string; round_number: number }
+        Returns: Json
+      }
+      get_paint_room_state: { Args: { room_id: string }; Returns: Json }
+      get_random_word: { Args: { pack: string }; Returns: string }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
           _user_id: string
         }
         Returns: boolean
+      }
+      join_paint_room: { Args: { game_pin: string }; Returns: Json }
+      leave_paint_room: { Args: { room_id: string }; Returns: Json }
+      save_canvas_checkpoint: {
+        Args: { fabric_json: Json; room_id: string; round_number: number }
+        Returns: Json
+      }
+      set_player_ready: {
+        Args: { is_ready: boolean; room_id: string }
+        Returns: Json
+      }
+      start_paint_game: { Args: { room_id: string }; Returns: Json }
+      submit_paint_guess: {
+        Args: { guess: string; room_id: string }
+        Returns: Json
       }
     }
     Enums: {
