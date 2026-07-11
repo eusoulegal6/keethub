@@ -71,6 +71,21 @@ export const LOCAL_GAMES: LocalGame[] = [
     },
   },
   {
+    slug: "paint-and-guess",
+    route: "/hub/games/paint-and-guess",
+    data: {
+      id: localId("paint-and-guess"),
+      slug: "paint-and-guess",
+      title: "Paint & Guess",
+      description: "Draw prompts, guess sketches, and keep the points flowing. Real-time multiplayer party game.",
+      category: "party",
+      thumbnail_url: null,
+      accent_color: "#a78bfa",
+      is_active: true,
+      created_at: new Date().toISOString(),
+    },
+  },
+  {
     slug: "trivia-blitz",
     route: "/hub/games/trivia-blitz",
     data: {
