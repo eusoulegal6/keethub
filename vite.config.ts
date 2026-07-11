@@ -12,4 +12,18 @@ export default defineConfig({
     // nitro/vite builds from this
     server: { entry: "server" },
   },
+  vite: {
+    ssr: {
+      // browser-only packages used by paint-and-guess — Vite's server-build
+      // module-graph analysis must skip them even for ssr:false routes
+      external: [
+        "socket.io-client",
+        "fabric",
+        "@dicebear/core",
+        "@dicebear/avataaars",
+        "engine.io-client",
+        "xmlhttprequest-ssl",
+      ],
+    },
+  },
 });
