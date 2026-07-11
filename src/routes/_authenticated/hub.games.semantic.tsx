@@ -4,7 +4,8 @@ import { useServerFn } from "@tanstack/react-start";
 import { ArrowLeft, Trophy, Send, Lightbulb, Flag, HelpCircle, Share2, MoreVertical } from "lucide-react";
 import { toast } from "sonner";
 import { useState, useEffect, FormEvent } from "react";
-import { getGameBySlug } from "@/lib/games.functions";
+import { getGameBySlug, type Game } from "@/lib/games.functions";
+import { LOCAL_GAMES } from "@/lib/local-games";
 import { getGameLeaderboard, submitScore } from "@/lib/scores.functions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -157,6 +158,8 @@ function saveGameState(state: GameState): void {
 
 // ── Route ─────────────────────────────────────────────────────────
 
+const SEMANTIC_LOCAL: Game = LOCAL_GAMES.find(g => g.slug === "semantic")!.data;
+
 const gameQuery = queryOptions({
   queryKey: ["game", "semantic"],
   queryFn: () => getGameBySlug({ data: { slug: "semantic" } }),
@@ -166,8 +169,8 @@ const gameQuery = queryOptions({
 export const Route = createFileRoute("/_authenticated/hub/games/semantic")({
   loader: async ({ context }) => {
     const game = await context.queryClient.ensureQueryData(gameQuery);
-    if (!game) throw notFound();
-    return { game };
+    // Fall back to local definition if Supabase doesn't have the row yet
+    return { game: game ?? SEMANTIC_LOCAL };
   },
   component: SemanticGame,
   notFoundComponent: () => (
