@@ -26,9 +26,11 @@ import {
   FaceSelector,
   StyleSelector,
 } from "./categories";
-import { Shuffle, RotateCcw } from "lucide-react";
+import { Shuffle, RotateCcw, Upload, X } from "lucide-react";
 import { getAssetsByCategory } from "@/lib/avatar/categories/assets";
+import { compressImage } from "@/lib/avatar/image";
 import { toast } from "sonner";
+import { useRef } from "react";
 
 interface AvatarCustomizerProps {
   open: boolean;
@@ -48,6 +50,7 @@ export function AvatarCustomizer({
     if (validateAvatarConfig(loaded)) return loaded;
     return sanitizeAvatarConfig(loaded as Record<string, any>);
   });
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (open) {
@@ -149,6 +152,29 @@ export function AvatarCustomizer({
     setConfig(randomConfig);
   };
 
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error("Image must be less than 5MB");
+      return;
+    }
+
+    try {
+      const dataUrl = await compressImage(file);
+      updateConfig({ customImageUrl: dataUrl });
+      toast.success("Image uploaded!");
+    } catch {
+      toast.error("Failed to process image");
+    }
+  };
+
+  const handleRemoveImage = () => {
+    updateConfig({ customImageUrl: undefined });
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-5xl w-[95vw] h-[85vh] max-h-[600px] flex flex-col p-0">
@@ -186,6 +212,45 @@ export function AvatarCustomizer({
                 <RotateCcw className="w-4 h-4 mr-2" />
                 Reset
               </Button>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Custom Image</Label>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                onChange={handleImageUpload}
+                className="hidden"
+                id="avatar-image-upload"
+              />
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="flex-1"
+                >
+                  <Upload className="w-4 h-4 mr-2" />
+                  {config.customImageUrl ? "Change" : "Upload"}
+                </Button>
+                {config.customImageUrl && (
+                  <Button
+                    variant="outline"
+                    type="button"
+                    onClick={handleRemoveImage}
+                    size="icon"
+                    title="Remove uploaded image"
+                  >
+                    <X className="w-4 h-4" />
+                  </Button>
+                )}
+              </div>
+              {config.customImageUrl && (
+                <p className="text-xs text-muted-foreground">
+                  Using custom image instead of generated avatar
+                </p>
+              )}
             </div>
           </div>
 

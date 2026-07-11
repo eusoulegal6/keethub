@@ -32,9 +32,29 @@ export function AvatarPreview({ config, size = 200, className = "" }: AvatarPrev
     }
   }, [config, size]);
 
+  const containerClasses = `flex items-center justify-center overflow-hidden rounded-full ${className}`;
+
+  if (config.customImageUrl) {
+    return (
+      <div
+        className={containerClasses}
+        role="img"
+        aria-label={`Avatar: ${config.name || "Custom avatar"}`}
+        style={{ width: size, height: size }}
+      >
+        <img
+          src={config.customImageUrl}
+          alt={config.name || "Avatar"}
+          className="w-full h-full object-cover"
+          style={{ width: size, height: size }}
+        />
+      </div>
+    );
+  }
+
   return (
     <div
-      className={`flex items-center justify-center ${className}`}
+      className={containerClasses}
       role="img"
       aria-label={`Avatar preview: ${config.name || "Custom avatar"}`}
     >
