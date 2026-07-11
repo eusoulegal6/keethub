@@ -54,8 +54,8 @@ export default function Lobby({ onEnterRoom }: { onEnterRoom: () => void }) {
     try {
       const newRoomId = await createRoom(roomName, true, "classic");
 
-      // Join the room as first player
-      joinRoom(newRoomId, playerName);
+      // Join the room as first player (await ensures roomId is set in state before navigating)
+      await joinRoom(newRoomId, playerName);
       onEnterRoom();
       toast.success("Room created!");
     } catch (error) {
@@ -89,7 +89,7 @@ export default function Lobby({ onEnterRoom }: { onEnterRoom: () => void }) {
       }
 
       const result = data as any;
-      joinRoom(result.roomId, playerName);
+      await joinRoom(result.roomId, playerName);
       onEnterRoom();
       toast.success("Joined room!");
     } catch (error) {
