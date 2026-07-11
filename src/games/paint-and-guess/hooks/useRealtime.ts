@@ -62,14 +62,6 @@ export function useRealtime(): {
           handler(payload);
         });
 
-        // Also handle presence-related events via events channel
-        if (event === "player-joined" || event === "player-left") {
-          eventsChannel.on("presence", { event: "sync" }, () => {
-            const state = eventsChannel.presenceState();
-            handler({ type: "presence-sync", state });
-          });
-        }
-
         return () => {
           handlers.get(event)?.delete(handler);
         };
