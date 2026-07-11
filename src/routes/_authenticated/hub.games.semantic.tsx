@@ -1,7 +1,7 @@
-import { createFileRoute, Link, notFound } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { queryOptions, useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { ArrowLeft, Trophy, Send, Lightbulb, Flag, HelpCircle, Share2, MoreVertical } from "lucide-react";
+import { ArrowLeft, Trophy, Send, Lightbulb, Flag, Share2, MoreVertical, HelpCircle } from "lucide-react";
 import { toast } from "sonner";
 import { useState, useEffect, FormEvent } from "react";
 import { getGameBySlug, type Game } from "@/lib/games.functions";
@@ -11,64 +11,19 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
+  Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger,
 } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { getSimilarity, getDailyWord, getHintWords, isValidWord } from "@/lib/semantic/similarity";
 
-// ── Word database ────────────────────────────────────────────────
-
-interface RankGroup {
-  similar: string[];
-  rank: number;
-}
-
-const WORD_DB: Record<string, RankGroup[]> = {
-  ocean: [
-    { rank: 1, similar: ["sea", "water", "wave", "beach", "tide", "marine", "aquatic", "coast", "shore", "deep"] },
-    { rank: 2, similar: ["lake", "river", "pond", "stream", "bay", "gulf", "inlet", "harbor", "lagoon"] },
-    { rank: 3, similar: ["blue", "wet", "salt", "fish", "whale", "dolphin", "coral", "reef", "island"] },
-    { rank: 4, similar: ["vast", "liquid", "surface", "depth", "horizon", "current"] },
-  ],
-  mountain: [
-    { rank: 1, similar: ["peak", "summit", "hill", "cliff", "slope", "alpine", "elevation", "ridge", "volcano"] },
-    { rank: 2, similar: ["rock", "stone", "high", "tall", "climb", "steep", "range", "valley"] },
-    { rank: 3, similar: ["snow", "ice", "cold", "nature", "landscape", "terrain", "wilderness"] },
-  ],
-  forest: [
-    { rank: 1, similar: ["tree", "woods", "woodland", "jungle", "grove", "timber", "pine", "oak"] },
-    { rank: 2, similar: ["green", "leaf", "branch", "trunk", "nature", "wild", "vegetation"] },
-    { rank: 3, similar: ["park", "garden", "plant", "grass", "bush", "shrub", "fauna"] },
-  ],
-  sunset: [
-    { rank: 1, similar: ["dusk", "twilight", "evening", "dawn", "sunrise", "horizon", "sky"] },
-    { rank: 2, similar: ["orange", "red", "pink", "golden", "light", "glow", "color"] },
-    { rank: 3, similar: ["beautiful", "romantic", "peaceful", "calm", "serene", "view"] },
-  ],
-  thunder: [
-    { rank: 1, similar: ["lightning", "storm", "rain", "weather", "clouds", "bolt", "flash"] },
-    { rank: 2, similar: ["loud", "noise", "sound", "rumble", "boom", "crash", "roar"] },
-    { rank: 3, similar: ["dark", "sky", "power", "nature", "force", "energy"] },
-  ],
-};
-
-const WORDS = Object.keys(WORD_DB);
-
-// ── Game logic ────────────────────────────────────────────────────
+// ── Game state types ──────────────────────────────────────────
 
 interface Guess {
   word: string;
-  rank: number;
+  similarity: number; // 0–100
 }
 
 interface GameState {
@@ -79,86 +34,60 @@ interface GameState {
   hintsUsed: number;
 }
 
-function getDailyWord(): string {
-  const today = new Date();
-  const dayOfYear = Math.floor(
-    (today.getTime() - new Date(today.getFullYear(), 0, 0).getTime()) /
-      86400000,
-  );
-  return WORDS[dayOfYear % WORDS.length];
-}
+// ── Similarity display ────────────────────────────────────────
 
-function getSimilarityRank(target: string, guess: string): number {
-  const guessLower = guess.toLowerCase().trim();
-  if (guessLower === target.toLowerCase()) return 1;
-  const groups = WORD_DB[target.toLowerCase()];
-  if (!groups) return 9999;
-  for (const g of groups) {
-    if (g.similar.includes(guessLower)) return g.rank;
-  }
-  return Math.floor(Math.random() * 8000) + 2000;
-}
+type Heat = "perfect" | "burning" | "hot" | "warm" | "cool" | "cold";
 
-type SimCategory = "perfect" | "excellent" | "great" | "good" | "medium" | "poor" | "cold";
-
-function getSimCategory(rank: number): SimCategory {
-  if (rank === 1) return "perfect";
-  if (rank <= 10) return "excellent";
-  if (rank <= 50) return "great";
-  if (rank <= 100) return "good";
-  if (rank <= 500) return "medium";
-  if (rank <= 1000) return "poor";
+function getHeat(sim: number): Heat {
+  if (sim === 100) return "perfect";
+  if (sim >= 70) return "burning";
+  if (sim >= 50) return "hot";
+  if (sim >= 30) return "warm";
+  if (sim >= 15) return "cool";
   return "cold";
 }
 
-const SIM_COLORS: Record<SimCategory, string> = {
-  perfect: "oklch(0.72 0.18 152)",      // success green
-  excellent: "oklch(0.68 0.20 148)",
-  great: "oklch(0.72 0.22 295)",         // primary purple
-  good: "oklch(0.78 0.17 75)",           // warning amber
-  medium: "oklch(0.65 0.24 40)",         // orange
-  poor: "oklch(0.55 0.15 30)",           // red-ish
-  cold: "oklch(0.35 0.04 265)",          // muted
+const HEAT_COLORS: Record<Heat, string> = {
+  perfect: "#22c55e",
+  burning: "#16a34a",
+  hot: "#f59e0b",
+  warm: "#f97316",
+  cool: "#6366f1",
+  cold: "#4b5563",
 };
 
-function getSimPercentage(rank: number): number {
-  if (rank === 1) return 100;
-  if (rank <= 10) return 90;
-  if (rank <= 50) return 80;
-  if (rank <= 100) return 70;
-  if (rank <= 500) return 50;
-  if (rank <= 1000) return 30;
-  return Math.max(5, 100 - Math.log10(rank) * 15);
-}
+const HEAT_LABELS: Record<Heat, string> = {
+  perfect: "Perfect!",
+  burning: "🔥 Burning hot",
+  hot: "Hot",
+  warm: "Warm",
+  cool: "Cool",
+  cold: "Cold",
+};
 
-function getHint(target: string, usedHints: number): string | null {
-  const groups = WORD_DB[target.toLowerCase()];
-  if (!groups || usedHints >= 3) return null;
-  const rank1 = groups[0]?.similar ?? [];
-  return usedHints < rank1.length ? rank1[usedHints] : null;
-}
+// ── Persistence ───────────────────────────────────────────────
 
-const LS_KEY = "semanticGameV1";
+const LS_KEY = "semanticGameV2";
 
-function loadGameState(): GameState | null {
+function loadState(target: string): GameState | null {
   try {
     const raw = localStorage.getItem(LS_KEY);
     if (!raw) return null;
-    const state = JSON.parse(raw) as GameState;
-    if (state.targetWord !== getDailyWord()) return null;
-    return state;
+    const s = JSON.parse(raw) as GameState;
+    if (s.targetWord !== target) return null;
+    return s;
   } catch {
     return null;
   }
 }
 
-function saveGameState(state: GameState): void {
-  localStorage.setItem(LS_KEY, JSON.stringify(state));
+function saveState(s: GameState) {
+  localStorage.setItem(LS_KEY, JSON.stringify(s));
 }
 
-// ── Route ─────────────────────────────────────────────────────────
+// ── Route ─────────────────────────────────────────────────────
 
-const SEMANTIC_LOCAL: Game = LOCAL_GAMES.find(g => g.slug === "semantic")!.data;
+const SEMANTIC_LOCAL: Game = LOCAL_GAMES.find((g) => g.slug === "semantic")!.data;
 
 const gameQuery = queryOptions({
   queryKey: ["game", "semantic"],
@@ -169,7 +98,6 @@ const gameQuery = queryOptions({
 export const Route = createFileRoute("/_authenticated/hub/games/semantic")({
   loader: async ({ context }) => {
     const game = await context.queryClient.ensureQueryData(gameQuery);
-    // Fall back to local definition if Supabase doesn't have the row yet
     return { game: game ?? SEMANTIC_LOCAL };
   },
   component: SemanticGame,
@@ -177,7 +105,6 @@ export const Route = createFileRoute("/_authenticated/hub/games/semantic")({
     <div className="flex min-h-[60vh] items-center justify-center">
       <div className="text-center">
         <h2 className="text-xl font-semibold">Game not found</h2>
-        <p className="mt-2 text-muted-foreground">Semantic hasn't been set up yet.</p>
         <Link to="/hub" className="mt-4 inline-block text-primary underline">
           Back to library
         </Link>
@@ -186,7 +113,7 @@ export const Route = createFileRoute("/_authenticated/hub/games/semantic")({
   ),
 });
 
-// ── Component ─────────────────────────────────────────────────────
+// ── Main component ────────────────────────────────────────────
 
 function SemanticGame() {
   const { game } = Route.useLoaderData();
@@ -194,76 +121,82 @@ function SemanticGame() {
   const submitScoreFn = useServerFn(submitScore);
   const accent = game.accent_color ?? "#22c55e";
 
-  const [gs, setGs] = useState<GameState>(() => {
-    const loaded = loadGameState();
-    if (loaded) return loaded;
-    return {
-      targetWord: getDailyWord(),
-      guesses: [],
-      isComplete: false,
-      gaveUp: false,
-      hintsUsed: 0,
-    };
+  const dailyWord = getDailyWord();
+  const [gs, setGs] = useState<GameState>(() => loadState(dailyWord) ?? {
+    targetWord: dailyWord,
+    guesses: [],
+    isComplete: false,
+    gaveUp: false,
+    hintsUsed: 0,
   });
 
+  // Re-init state if the day changed since last visit
   useEffect(() => {
-    saveGameState(gs);
-  }, [gs]);
+    if (gs.targetWord !== dailyWord) {
+      setGs({ targetWord: dailyWord, guesses: [], isComplete: false, gaveUp: false, hintsUsed: 0 });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dailyWord]);
 
-  // ── Actions ──────────────────────────────────────────────────────
+  useEffect(() => { saveState(gs); }, [gs]);
+
+  // ── Actions ──────────────────────────────────────────────────
+
   const handleGuess = (word: string) => {
     if (gs.isComplete) return;
-    const rank = getSimilarityRank(gs.targetWord, word);
-    const newGuesses = [{ word, rank }, ...gs.guesses];
-    const won = rank === 1;
+    const lower = word.toLowerCase().trim();
+    const sim = getSimilarity(lower, gs.targetWord);
+    const won = lower === gs.targetWord;
+    const newGuesses = [{ word: lower, similarity: sim }, ...gs.guesses];
 
-    setGs((prev) => ({ ...prev, guesses: newGuesses, isComplete: won }));
+    setGs((p) => ({ ...p, guesses: newGuesses, isComplete: won }));
 
     if (won) {
-      toast.success(`You found "${gs.targetWord}" in ${newGuesses.length} guesses!`);
-    } else if (rank <= 10) {
-      toast(`Getting hot! Rank ${rank} — very close!`);
-    } else if (rank <= 50) {
-      toast(`Good guess! Rank ${rank} — you're on the right track.`);
+      toast.success(`You found "${gs.targetWord}" in ${newGuesses.length} ${newGuesses.length === 1 ? "guess" : "guesses"}!`);
+    } else if (sim >= 70) {
+      toast(`🔥 ${sim}% — burning hot!`);
+    } else if (sim >= 50) {
+      toast(`Hot! ${sim}% — on the right track.`);
     }
   };
 
   const handleHint = () => {
-    if (gs.hintsUsed >= 3) {
-      toast.error("No hints left — you've used all 3.");
+    const guessed = new Set(gs.guesses.map((g) => g.word));
+    const hints = getHintWords(gs.targetWord, 5, guessed);
+    const available = hints.filter((h) => !guessed.has(h));
+    if (gs.hintsUsed >= 3 || available.length === 0) {
+      toast.error("No hints left.");
       return;
     }
-    const hint = getHint(gs.targetWord, gs.hintsUsed);
-    if (hint) {
-      setGs((prev) => ({ ...prev, hintsUsed: prev.hintsUsed + 1 }));
-      toast(`Try: "${hint}"`);
-    }
+    const hint = available[gs.hintsUsed];
+    setGs((p) => ({ ...p, hintsUsed: p.hintsUsed + 1 }));
+    toast(`Try: "${hint}"`);
   };
 
   const handleGiveUp = () => {
-    setGs((prev) => ({ ...prev, isComplete: true, gaveUp: true }));
+    setGs((p) => ({ ...p, isComplete: true, gaveUp: true }));
   };
 
   const handleShare = () => {
     const text = gs.gaveUp
-      ? `I gave up on today's Semantic word: "${gs.targetWord}"`
-      : `I found "${gs.targetWord}" in ${gs.guesses.length} guesses!`;
+      ? `I gave up on Semantic #${dailyWordIndex()} — the word was "${gs.targetWord}".`
+      : `I found Semantic #${dailyWordIndex()} "${gs.targetWord}" in ${gs.guesses.length} ${gs.guesses.length === 1 ? "guess" : "guesses"}!`;
     if (navigator.share) {
       navigator.share({ text }).catch(() => {});
     } else {
       navigator.clipboard.writeText(text);
-      toast.success("Copied to clipboard!");
+      toast.success("Copied!");
     }
   };
 
-  // ── Score submission ─────────────────────────────────────────────
+  // ── Score ────────────────────────────────────────────────────
+
   const scoreMutation = useMutation({
     mutationFn: async () => {
       if (!game || gs.gaveUp) return;
-      // Higher is better: 1 guess = 100, 20 guesses = 81
       const s = Math.max(1, 101 - gs.guesses.length);
       await submitScoreFn({
-        data: { gameId: game.id, score: s, metadata: { guessCount: gs.guesses.length, hintsUsed: gs.hintsUsed } },
+        data: { gameId: game.id, score: s, metadata: { guessCount: gs.guesses.length, hints: gs.hintsUsed } },
       });
     },
     onSuccess: () => {
@@ -273,63 +206,55 @@ function SemanticGame() {
     onError: (e: Error) => toast.error(e.message),
   });
 
-  // ── Help dialog trigger ─────────────────────────────────────────
-  const helpTrigger = (
-    <DialogTrigger asChild>
-      <Button variant="outline" size="icon">
-        <HelpCircle className="h-4 w-4" />
-      </Button>
-    </DialogTrigger>
-  );
+  // ── Render ───────────────────────────────────────────────────
 
-  // ── Render ───────────────────────────────────────────────────────
   return (
     <div className="px-6 py-8 md:px-10 max-w-2xl mx-auto">
-      <Link
-        to="/hub"
-        className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground mb-6"
-      >
-        <ArrowLeft className="w-4 h-4" />
-        Back to library
+      <Link to="/hub" className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground mb-6">
+        <ArrowLeft className="w-4 h-4" /> Back to library
       </Link>
 
-      {/* Header bar */}
+      {/* Header */}
       <div className="flex items-center justify-between mb-8">
         <div>
           <h1 className="text-4xl font-extrabold tracking-tight">{game.title}</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            {gs.guesses.length} {gs.guesses.length === 1 ? "guess" : "guesses"}
+            #{dailyWordIndex()} · {gs.guesses.length} {gs.guesses.length === 1 ? "guess" : "guesses"}
           </p>
         </div>
-
         <div className="flex items-center gap-2">
+          {/* Help dialog */}
           <Dialog>
-            {helpTrigger}
+            <DialogTrigger asChild>
+              <Button variant="outline" size="icon"><HelpCircle className="h-4 w-4" /></Button>
+            </DialogTrigger>
             <DialogContent>
               <DialogHeader>
                 <DialogTitle>How to Play</DialogTitle>
                 <DialogDescription className="space-y-3 pt-4">
-                  <p>Guess the secret word by entering <strong>semantically similar</strong> words.</p>
-                  <p>Each guess receives a <strong>rank</strong> — the closer to #1, the more similar:</p>
-                  {[
-                    { cat: "perfect", label: "Rank 1 — Perfect match", color: SIM_COLORS.perfect },
-                    { cat: "excellent", label: "Rank 2–10 — Excellent", color: SIM_COLORS.excellent },
-                    { cat: "great", label: "Rank 11–50 — Great", color: SIM_COLORS.great },
-                    { cat: "good", label: "Rank 51–100 — Good", color: SIM_COLORS.good },
-                    { cat: "cold", label: "Rank 100+ — Cold", color: SIM_COLORS.cold },
-                  ].map((item) => (
-                    <p key={item.cat} className="text-sm flex items-center gap-2">
-                      <span
-                        className="inline-block w-3 h-3 rounded-full shrink-0"
-                        style={{ backgroundColor: item.color }}
-                      />
+                  <p>Guess the secret word. Each guess gets a <strong>similarity score</strong> (0–100%).</p>
+                  <p>Words that share spelling patterns (prefixes, suffixes, letter sequences) score higher:</p>
+                  {([
+                    { h: "perfect", label: "100% — Exact match", c: HEAT_COLORS.perfect },
+                    { h: "burning", label: "70–99% — Burning hot", c: HEAT_COLORS.burning },
+                    { h: "hot", label: "50–69% — Hot", c: HEAT_COLORS.hot },
+                    { h: "warm", label: "30–49% — Warm", c: HEAT_COLORS.warm },
+                    { h: "cool", label: "15–29% — Cool", c: HEAT_COLORS.cool },
+                    { h: "cold", label: "0–14% — Cold", c: HEAT_COLORS.cold },
+                  ] as const).map((item) => (
+                    <p key={item.h} className="text-sm flex items-center gap-2">
+                      <span className="inline-block w-3 h-3 rounded-full shrink-0" style={{ backgroundColor: item.c }} />{" "}
                       {item.label}
                     </p>
                   ))}
+                  <p className="text-xs text-muted-foreground pt-2">
+                    A new word every day. Fewer guesses = higher leaderboard score.
+                  </p>
                 </DialogDescription>
               </DialogHeader>
             </DialogContent>
           </Dialog>
+
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline" size="icon" disabled={gs.isComplete}>
@@ -338,57 +263,48 @@ function SemanticGame() {
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
               <DropdownMenuItem onClick={handleHint} disabled={gs.hintsUsed >= 3}>
-                <Lightbulb className="mr-2 h-4 w-4" />
-                Get Hint ({3 - gs.hintsUsed} left)
+                <Lightbulb className="mr-2 h-4 w-4" /> Hint ({3 - gs.hintsUsed} left)
               </DropdownMenuItem>
               <DropdownMenuItem onClick={handleGiveUp} className="text-destructive">
-                <Flag className="mr-2 h-4 w-4" />
-                Give Up
+                <Flag className="mr-2 h-4 w-4" /> Give Up
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
       </div>
 
-      {/* Game area */}
+      {/* Active game */}
       {!gs.isComplete ? (
         <>
           <GuessInput onSubmit={handleGuess} />
-
           <div className="mt-6">
             {gs.guesses.length === 0 ? (
               <div className="text-center text-muted-foreground py-16">
-                <p className="text-lg">No guesses yet. Type a word above!</p>
+                <p className="text-lg">Enter a word above to make your first guess.</p>
+                <p className="text-sm mt-2">Words that look similar to the target score higher.</p>
               </div>
             ) : (
               <ScrollArea className="max-h-[50vh]">
                 <div className="space-y-2">
                   {gs.guesses.map((guess, i) => {
-                    const cat = getSimCategory(guess.rank);
-                    const pct = getSimPercentage(guess.rank);
-                    const color = SIM_COLORS[cat];
+                    const heat = getHeat(guess.similarity);
+                    const color = HEAT_COLORS[heat];
                     return (
                       <div
                         key={`${guess.word}-${i}`}
-                        className="guess-item relative overflow-hidden rounded-lg border bg-card p-4"
+                        className="relative overflow-hidden rounded-lg border bg-card p-4 transition-colors"
                       >
                         <div
-                          className="absolute inset-0 opacity-10 transition-all"
-                          style={{
-                            background: `linear-gradient(to right, ${color} ${pct}%, transparent ${pct}%)`,
-                          }}
+                          className="absolute inset-0 opacity-[0.12]"
+                          style={{ background: `linear-gradient(to right, ${color} ${guess.similarity}%, transparent ${guess.similarity}%)` }}
                         />
                         <div className="relative flex items-center justify-between">
-                          <p className="font-semibold text-lg capitalize">{guess.word}</p>
-                          <div className="flex items-center gap-3">
-                            <div className="text-right">
-                              <div className="text-xs text-muted-foreground">Rank</div>
-                              <div className="font-bold text-lg tabular-nums">#{guess.rank}</div>
-                            </div>
-                            <span
-                              className="w-3 h-3 rounded-full shrink-0"
-                              style={{ backgroundColor: color }}
-                            />
+                          <div>
+                            <p className="font-semibold text-lg">{guess.word}</p>
+                            <p className="text-xs text-muted-foreground">{HEAT_LABELS[heat]}</p>
+                          </div>
+                          <div className="text-right">
+                            <div className="font-bold text-xl tabular-nums" style={{ color }}>{guess.similarity}%</div>
                           </div>
                         </div>
                       </div>
@@ -410,20 +326,17 @@ function SemanticGame() {
                 </div>
                 <CardTitle className="text-2xl">Game Over</CardTitle>
                 <CardDescription>
-                  The word was <span className="font-bold capitalize">"{gs.targetWord}"</span>. Better luck tomorrow!
+                  The word was <span className="font-bold">"{gs.targetWord}"</span>. Better luck tomorrow!
                 </CardDescription>
               </>
             ) : (
               <>
-                <div
-                  className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full"
-                  style={{ backgroundColor: SIM_COLORS.perfect }}
-                >
+                <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full" style={{ backgroundColor: HEAT_COLORS.perfect }}>
                   <Trophy className="h-8 w-8 text-white" />
                 </div>
                 <CardTitle className="text-2xl">Congratulations!</CardTitle>
                 <CardDescription>
-                  You found <span className="font-bold capitalize">"{gs.targetWord}"</span> in{" "}
+                  You found <span className="font-bold">"{gs.targetWord}"</span> in{" "}
                   {gs.guesses.length} {gs.guesses.length === 1 ? "guess" : "guesses"}!
                 </CardDescription>
               </>
@@ -431,23 +344,15 @@ function SemanticGame() {
           </CardHeader>
           <CardContent className="space-y-3">
             <Button onClick={handleShare} className="w-full" size="lg">
-              <Share2 className="mr-2 h-4 w-4" />
-              Share Result
+              <Share2 className="mr-2 h-4 w-4" /> Share
             </Button>
             {!gs.gaveUp && (
-              <Button
-                variant="outline"
-                className="w-full"
-                onClick={() => scoreMutation.mutate()}
-                disabled={scoreMutation.isPending}
-              >
+              <Button variant="outline" className="w-full" onClick={() => scoreMutation.mutate()} disabled={scoreMutation.isPending}>
                 <Trophy className="mr-2 h-4 w-4" />
                 {scoreMutation.isPending ? "Submitting..." : "Submit Score"}
               </Button>
             )}
-            <p className="text-center text-sm text-muted-foreground">
-              New word available tomorrow!
-            </p>
+            <p className="text-center text-sm text-muted-foreground">New word available tomorrow!</p>
           </CardContent>
         </Card>
       )}
@@ -460,77 +365,62 @@ function SemanticGame() {
   );
 }
 
-// ── Guess input ────────────────────────────────────────────────────
+// ── GuessInput ────────────────────────────────────────────────
 
-function GuessInput({ onSubmit }: { onSubmit: (word: string) => void }) {
-  const [value, setValue] = useState("");
+function GuessInput({ onSubmit }: { onSubmit: (w: string) => void }) {
+  const [v, setV] = useState("");
 
-  const handleSubmit = (e: FormEvent) => {
+  const handle = (e: FormEvent) => {
     e.preventDefault();
-    const trimmed = value.trim().toLowerCase();
-    if (trimmed) {
-      onSubmit(trimmed);
-      setValue("");
+    const t = v.trim();
+    if (!isValidWord(t)) {
+      toast.error("Enter a single word (letters only, 2+ characters).");
+      return;
     }
+    onSubmit(t);
+    setV("");
   };
 
   return (
-    <form onSubmit={handleSubmit} className="flex gap-2 w-full">
+    <form onSubmit={handle} className="flex gap-2 w-full">
       <Input
         type="text"
-        value={value}
-        onChange={(e) => setValue(e.target.value)}
+        value={v}
+        onChange={(e) => setV(e.target.value)}
         placeholder="Type a word..."
         className="flex-1 text-base"
         autoFocus
         autoComplete="off"
         spellCheck={false}
       />
-      <Button type="submit" disabled={!value.trim()} size="icon" className="shrink-0">
-        <Send className="h-4 w-4" />
-      </Button>
+      <Button type="submit" disabled={!v.trim()} size="icon" className="shrink-0"><Send className="h-4 w-4" /></Button>
     </form>
   );
 }
 
-// ── Leaderboard preview ───────────────────────────────────────────
+// ── Leaderboard ───────────────────────────────────────────────
 
 function LeaderboardPreview({ gameId }: { gameId: string }) {
-  const { data: leaderboard, isLoading } = useQuery(
-    queryOptions({
-      queryKey: ["game-leaderboard", gameId],
-      queryFn: () => (gameId ? getGameLeaderboard({ data: { gameId } }) : Promise.resolve([])),
-      enabled: !!gameId,
-      staleTime: 10_000,
-    }),
-  );
+  const { data: lb, isLoading } = useQuery(queryOptions({
+    queryKey: ["game-leaderboard", gameId],
+    queryFn: () => (gameId ? getGameLeaderboard({ data: { gameId } }) : Promise.resolve([])),
+    enabled: !!gameId,
+    staleTime: 10_000,
+  }));
 
   return (
     <div className="rounded-2xl border border-border bg-card p-5">
       <div className="flex items-center gap-2 mb-4">
-        <Trophy className="w-4 h-4 text-primary" />
-        <h2 className="font-semibold">Top players</h2>
+        <Trophy className="w-4 h-4 text-primary" /><h2 className="font-semibold">Top players</h2>
       </div>
       {isLoading ? (
-        <p className="text-sm text-muted-foreground">Loading scores...</p>
-      ) : leaderboard && leaderboard.length > 0 ? (
+        <p className="text-sm text-muted-foreground">Loading...</p>
+      ) : lb && lb.length > 0 ? (
         <ol className="space-y-2">
-          {leaderboard.map((row, i) => (
+          {lb.map((row, i) => (
             <li key={row.id} className="flex items-center justify-between text-sm py-1">
               <span className="flex items-center gap-3">
-                <span
-                  className={`w-5 text-xs tabular-nums ${
-                    i === 0
-                      ? "text-yellow-400 font-bold"
-                      : i === 1
-                        ? "text-gray-300 font-semibold"
-                        : i === 2
-                          ? "text-amber-600 font-semibold"
-                          : "text-muted-foreground"
-                  }`}
-                >
-                  {i + 1}
-                </span>
+                <span className={`w-5 text-xs tabular-nums ${i === 0 ? "text-yellow-400 font-bold" : i === 1 ? "text-gray-300 font-semibold" : i === 2 ? "text-amber-600 font-semibold" : "text-muted-foreground"}`}>{i + 1}</span>
                 <span className="truncate">{row.username ?? "anon"}</span>
               </span>
               <span className="font-semibold tabular-nums">{row.score.toLocaleString()}</span>
@@ -542,4 +432,12 @@ function LeaderboardPreview({ gameId }: { gameId: string }) {
       )}
     </div>
   );
+}
+
+// ── Helpers ──────────────────────────────────────────────────
+
+function dailyWordIndex(): number {
+  const now = new Date();
+  const utc = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+  return Math.floor(utc / 86400000);
 }
