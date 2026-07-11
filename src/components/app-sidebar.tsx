@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { Link, useRouterState, useNavigate } from "@tanstack/react-router";
 import {
   Gamepad2,
@@ -18,9 +19,10 @@ import {
   SidebarMenuItem,
 } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
+import { AvatarPreview } from "@/components/avatar/AvatarPreview";
+import { useProfileStore } from "@/stores/profile-store";
 
 const navItems = [
   { title: "Library", url: "/hub", icon: LayoutGrid, exact: true },
@@ -33,8 +35,13 @@ export function AppSidebar() {
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { avatarConfig, isLoaded, loadProfile } = useProfileStore();
 
-  const initial = user?.email?.[0]?.toUpperCase() ?? "?";
+  useEffect(() => {
+    if (user?.id && !isLoaded) {
+      loadProfile(user.id);
+    }
+  }, [user?.id, isLoaded, loadProfile]);
 
   return (
     <Sidebar collapsible="icon">
@@ -75,12 +82,13 @@ export function AppSidebar() {
       </SidebarContent>
 
       <SidebarFooter>
-        <div className="flex items-center gap-2 p-2 rounded-lg group-data-[collapsible=icon]:justify-center">
-          <Avatar className="w-8 h-8">
-            <AvatarFallback className="bg-primary/20 text-primary text-xs font-semibold">
-              {initial}
-            </AvatarFallback>
-          </Avatar>
+        <Link
+          to="/hub/profile"
+          className="flex items-center gap-2 p-2 rounded-lg group-data-[collapsible=icon]:justify-center hover:bg-accent/50 transition-colors"
+        >
+          <div className="w-8 h-8 rounded-full overflow-hidden flex-shrink-0">
+            <AvatarPreview config={avatarConfig} size={32} />
+          </div>
           <div className="flex-1 min-w-0 group-data-[collapsible=icon]:hidden">
             <p className="text-sm font-medium truncate">
               {user?.email ?? "Player"}
@@ -91,7 +99,9 @@ export function AppSidebar() {
             size="icon"
             variant="ghost"
             className="w-7 h-7 group-data-[collapsible=icon]:hidden"
-            onClick={async () => {
+            onClick={async (e) => {
+              e.preventDefault();
+              e.stopPropagation();
               await queryClient.cancelQueries();
               queryClient.clear();
               await signOut();
@@ -101,7 +111,7 @@ export function AppSidebar() {
           >
             <LogOut className="w-4 h-4" />
           </Button>
-        </div>
+        </Link>
       </SidebarFooter>
     </Sidebar>
   );
