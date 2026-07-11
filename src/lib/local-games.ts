@@ -70,6 +70,21 @@ export const LOCAL_GAMES: LocalGame[] = [
       created_at: new Date().toISOString(),
     },
   },
+  {
+    slug: "trivia-blitz",
+    route: "/hub/games/trivia-blitz",
+    data: {
+      id: localId("trivia-blitz"),
+      slug: "trivia-blitz",
+      title: "Trivia Blitz",
+      description: "Fast-paced quiz game — pick a category, answer quickly, and climb the leaderboard. Speed and accuracy win!",
+      category: "trivia",
+      thumbnail_url: null,
+      accent_color: "#a78bfa",
+      is_active: true,
+      created_at: new Date().toISOString(),
+    },
+  },
 ];
 
 // Quick lookup: slug → dedicated route (null = placeholder)
