@@ -32,7 +32,8 @@ export const LOCAL_GAMES: LocalGame[] = [
       id: localId("ping-pong"),
       slug: "ping-pong",
       title: "Ping Pong",
-      description: "Classic table tennis arcade. Challenge a friend or face the AI in a fast-paced paddle battle!",
+      description:
+        "Classic table tennis arcade. Challenge a friend or face the AI in a fast-paced paddle battle!",
       category: "arcade",
       thumbnail_url: null,
       accent_color: "#06b6d4",
@@ -47,7 +48,8 @@ export const LOCAL_GAMES: LocalGame[] = [
       id: localId("semantic"),
       slug: "semantic",
       title: "Semantic",
-      description: "Guess the secret word by entering semantically similar words. Each guess gets a rank — the closer to #1, the hotter you are!",
+      description:
+        "Guess the secret word by entering semantically similar words. Each guess gets a rank — the closer to #1, the hotter you are!",
       category: "puzzle",
       thumbnail_url: null,
       accent_color: "#22c55e",
@@ -62,7 +64,8 @@ export const LOCAL_GAMES: LocalGame[] = [
       id: localId("chess"),
       slug: "chess",
       title: "Chess",
-      description: "Play chess locally, challenge the AI, or solve tactical puzzles. Classic strategy with a modern interface.",
+      description:
+        "Play chess locally, challenge the AI, or solve tactical puzzles. Classic strategy with a modern interface.",
       category: "strategy",
       thumbnail_url: null,
       accent_color: "#a78bfa",
@@ -77,7 +80,8 @@ export const LOCAL_GAMES: LocalGame[] = [
       id: localId("paint-and-guess"),
       slug: "paint-and-guess",
       title: "Paint & Guess",
-      description: "Draw prompts, guess sketches, and keep the points flowing. Real-time multiplayer party game.",
+      description:
+        "Draw prompts, guess sketches, and keep the points flowing. Real-time multiplayer party game.",
       category: "party",
       thumbnail_url: null,
       accent_color: "#a78bfa",
@@ -92,10 +96,27 @@ export const LOCAL_GAMES: LocalGame[] = [
       id: localId("trivia-blitz"),
       slug: "trivia-blitz",
       title: "Trivia Blitz",
-      description: "Fast-paced quiz game — pick a category, answer quickly, and climb the leaderboard. Speed and accuracy win!",
+      description:
+        "Fast-paced quiz game — pick a category, answer quickly, and climb the leaderboard. Speed and accuracy win!",
       category: "trivia",
       thumbnail_url: null,
       accent_color: "#a78bfa",
+      is_active: true,
+      created_at: new Date().toISOString(),
+    },
+  },
+  {
+    slug: "balderdash",
+    route: "/hub/games/balderdash",
+    data: {
+      id: localId("balderdash"),
+      slug: "balderdash",
+      title: "Balderdash",
+      description:
+        "Invent convincing fake definitions, find the real one, and score when other players believe your bluff.",
+      category: "party",
+      thumbnail_url: null,
+      accent_color: "#f59e0b",
       is_active: true,
       created_at: new Date().toISOString(),
     },
