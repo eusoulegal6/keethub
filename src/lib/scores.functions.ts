@@ -5,17 +5,13 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import type { Database } from "@/integrations/supabase/types";
 
 function publicClient() {
-  return createClient<Database>(
-    process.env.SUPABASE_URL!,
-    process.env.SUPABASE_PUBLISHABLE_KEY!,
-    {
-      auth: {
-        storage: undefined,
-        persistSession: false,
-        autoRefreshToken: false,
-      },
+  return createClient<Database>(process.env.SUPABASE_URL!, process.env.SUPABASE_PUBLISHABLE_KEY!, {
+    auth: {
+      storage: undefined,
+      persistSession: false,
+      autoRefreshToken: false,
     },
-  );
+  });
 }
 
 export interface LeaderboardEntry {
@@ -28,26 +24,41 @@ export interface LeaderboardEntry {
   game_title: string;
 }
 
-export const getGlobalLeaderboard = createServerFn({ method: "GET" }).handler(
-  async () => {
-    const supabase = publicClient();
-    const { data, error } = await supabase
-      .from("game_scores")
-      .select("id, score, created_at, user_id, games(slug, title), profiles(username)")
-      .order("score", { ascending: false })
-      .limit(25);
-    if (error) throw new Error(error.message);
-    return (data ?? []).map((row: any) => ({
-      id: row.id,
-      score: row.score,
-      created_at: row.created_at,
-      user_id: row.user_id,
-      username: row.profiles?.username ?? null,
-      game_slug: row.games?.slug ?? "",
-      game_title: row.games?.title ?? "",
-    })) as LeaderboardEntry[];
-  },
-);
+type GlobalScoreRow = {
+  id: string;
+  score: number;
+  created_at: string;
+  user_id: string;
+  games: { slug: string | null; title: string | null } | null;
+  profiles: { username: string | null } | null;
+};
+
+type GameScoreRow = {
+  id: string;
+  score: number;
+  created_at: string;
+  user_id: string;
+  profiles: { username: string | null } | null;
+};
+
+export const getGlobalLeaderboard = createServerFn({ method: "GET" }).handler(async () => {
+  const supabase = publicClient();
+  const { data, error } = await supabase
+    .from("game_scores")
+    .select("id, score, created_at, user_id, games(slug, title), profiles(username)")
+    .order("score", { ascending: false })
+    .limit(100);
+  if (error) throw new Error(error.message);
+  return ((data ?? []) as unknown as GlobalScoreRow[]).map((row) => ({
+    id: row.id,
+    score: row.score,
+    created_at: row.created_at,
+    user_id: row.user_id,
+    username: row.profiles?.username ?? null,
+    game_slug: row.games?.slug ?? "",
+    game_title: row.games?.title ?? "",
+  }));
+});
 
 export const getGameLeaderboard = createServerFn({ method: "GET" })
   .inputValidator((input) => z.object({ gameId: z.string().uuid() }).parse(input))
@@ -60,7 +71,7 @@ export const getGameLeaderboard = createServerFn({ method: "GET" })
       .order("score", { ascending: false })
       .limit(10);
     if (error) throw new Error(error.message);
-    return (rows ?? []).map((row: any) => ({
+    return ((rows ?? []) as unknown as GameScoreRow[]).map((row) => ({
       id: row.id,
       score: row.score,
       created_at: row.created_at,
