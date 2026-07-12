@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, useCallback, ReactNode } from "react";
+import { createContext, useContext, useEffect, useState, useCallback, useRef, ReactNode } from "react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useRealtime, type RoomChannel } from "@/games/paint-and-guess/hooks/useRealtime";
@@ -51,7 +51,7 @@ interface GameContextType {
   roundWinner: Player | null;
   channel: RoomChannel | null;
   isConnected: boolean;
-  joinRoom: (roomId: string, playerName: string, avatar?: string | AvatarConfig) => void;
+  joinRoom: (roomId: string, playerName: string, avatar?: string | AvatarConfig) => Promise<void>;
   createRoom: (roomName: string, isPublic?: boolean, wordPack?: string) => Promise<string>;
   leaveRoom: () => void;
   startGame: () => void;
@@ -76,27 +76,15 @@ interface ChatMessage {
 
 function createInitialRoundState(): RoundState {
   return {
-    number: 0,
-    drawer: null,
-    word: null,
-    revealedWord: null,
-    timeLeft: 60,
-    roundTime: 60,
-    winner: null,
-    deadlineAt: null,
+    number: 0, drawer: null, word: null, revealedWord: null,
+    timeLeft: 60, roundTime: 60, winner: null, deadlineAt: null,
   };
 }
 
 function createInitialGameState(): GameState {
   return {
-    roomId: null,
-    playerName: "",
-    ownerId: null,
-    selfId: null,
-    players: [],
-    phase: "lobby",
-    round: createInitialRoundState(),
-    maxRounds: 6,
+    roomId: null, playerName: "", ownerId: null, selfId: null,
+    players: [], phase: "lobby", round: createInitialRoundState(), maxRounds: 6,
   };
 }
 
@@ -108,36 +96,72 @@ export function GameProvider({ children }: { children: ReactNode }) {
   const { joinRoomChannel, leaveRoomChannel } = useRealtime();
   const [gameState, setGameState] = useState<GameState>(createInitialGameState());
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
-  const [channel, setChannel] = useState<RoomChannel | null>(null);
-  const [isConnected, setIsConnected] = useState(true);
-  const channelRef = { current: null as RoomChannel | null };
+  const [isConnected] = useState(true);
+  const channelRef = useRef<RoomChannel | null>(null);
+  const timerRef = useRef<number | null>(null);
+  const advanceCalledRef = useRef(false);
 
   // ── Cleanup on unmount ──────────────────────────────────────
   useEffect(() => {
     return () => {
-      if (channelRef.current) {
-        channelRef.current.unsubscribe();
-      }
+      if (timerRef.current) clearInterval(timerRef.current);
+      channelRef.current?.unsubscribe();
     };
+  }, []);
+
+  // ── Fetch players helper ─────────────────────────────────────
+  const fetchRoomPlayers = useCallback(async (roomId: string) => {
+    const { data, error } = await supabase
+      .from("game_room_players")
+      .select("*")
+      .eq("room_id", roomId);
+
+    if (error) return;
+
+    let playerList = (data || []).map((p: any) => ({
+      id: p.id,
+      name: p.name,
+      score: p.score,
+      isReady: p.is_ready,
+      avatar: p.avatar,
+    }));
+
+    // If selfId not yet set, find it by matching auth user to player user_id
+    // (only needed until the migration adding userId to get_paint_room_state runs)
+    let foundSelfId: string | null = null;
+    if (data?.length) {
+      const { data: authData } = await supabase.auth.getUser();
+      const authUserId = authData.user?.id;
+      if (authUserId) {
+        const selfRow = data.find((p: any) => p.user_id === authUserId);
+        if (selfRow) foundSelfId = selfRow.id;
+      }
+    }
+
+    setGameState((prev) => ({
+      ...prev,
+      selfId: prev.selfId || foundSelfId || null,
+      players: playerList,
+    }));
   }, []);
 
   // ── Room event subscriber ───────────────────────────────────
   const subscribeToRoom = useCallback((roomId: string) => {
+    if (channelRef.current) {
+      channelRef.current.unsubscribe();
+    }
     const roomChannel = joinRoomChannel(roomId);
     channelRef.current = roomChannel;
-    setChannel(roomChannel);
 
-    roomChannel.subscribe("player-joined", (payload: any) => {
-      toast.success(`${payload.playerName} joined`);
+    roomChannel.subscribe("player-joined", () => {
       fetchRoomPlayers(roomId);
     });
 
-    roomChannel.subscribe("player-left", (payload: any) => {
-      toast.info(`${payload.playerName} left`);
+    roomChannel.subscribe("player-left", () => {
       fetchRoomPlayers(roomId);
     });
 
-    roomChannel.subscribe("player-ready", (payload: any) => {
+    roomChannel.subscribe("player-ready", () => {
       fetchRoomPlayers(roomId);
     });
 
@@ -146,35 +170,29 @@ export function GameProvider({ children }: { children: ReactNode }) {
         ...prev,
         phase: "drawing",
         round: {
-          ...prev.round,
           number: payload.roundNumber || 1,
           drawer: payload.drawer || null,
+          word: payload.word || null,
           timeLeft: payload.roundTime ?? prev.round.roundTime,
           roundTime: payload.roundTime ?? prev.round.roundTime,
           deadlineAt: payload.deadlineAt ?? null,
           revealedWord: null,
           winner: null,
-          word: null,
         },
       }));
       toast.info("Game started!");
     });
 
-    roomChannel.subscribe("draw-word", (payload: any) => {
-      setGameState((prev) => ({
-        ...prev,
-        round: { ...prev.round, word: payload.word },
-      }));
-    });
-
     roomChannel.subscribe("round-started", (payload: any) => {
+      advanceCalledRef.current = false;
+      setChatMessages([]);
       setGameState((prev) => ({
         ...prev,
         phase: "drawing",
         round: {
           number: payload.roundNumber,
           drawer: payload.drawer || null,
-          word: null,
+          word: payload.word || null,
           revealedWord: null,
           timeLeft: payload.roundTime,
           roundTime: payload.roundTime,
@@ -182,13 +200,12 @@ export function GameProvider({ children }: { children: ReactNode }) {
           deadlineAt: payload.deadlineAt ?? null,
         },
       }));
+      fetchRoomPlayers(roomId);
       window.dispatchEvent(new CustomEvent("round-started"));
-      toast.info(`Round ${payload.roundNumber} - ${
-        payload.drawer?.name || "Someone"
-      } is drawing!`);
     });
 
     roomChannel.subscribe("round-ended", (payload: any) => {
+      advanceCalledRef.current = false;
       setGameState((prev) => ({
         ...prev,
         phase: "round-ended",
@@ -201,10 +218,10 @@ export function GameProvider({ children }: { children: ReactNode }) {
         },
       }));
       window.dispatchEvent(new CustomEvent("round-ended"));
-      toast.info(`Round ended! The word was: ${payload.word}`);
     });
 
     roomChannel.subscribe("game-ended", (payload: any) => {
+      advanceCalledRef.current = false;
       setGameState((prev) => ({
         ...prev,
         phase: "game-ended",
@@ -224,7 +241,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
           type: "correct-guess",
         },
       ]);
-      if (payload.player.id !== gameState.selfId) {
+      if (payload.player.name !== gameState.playerName) {
         toast.success(`${payload.player.name} guessed correctly!`);
       }
       fetchRoomPlayers(roomId);
@@ -268,73 +285,174 @@ export function GameProvider({ children }: { children: ReactNode }) {
     });
 
     return roomChannel;
-  }, [joinRoomChannel, gameState.selfId, fetchRoomPlayers]);
+  }, [joinRoomChannel, gameState.playerName, fetchRoomPlayers]);
 
-  // ── Fetch players helper ─────────────────────────────────────
-  function fetchRoomPlayers(roomId: string) {
-    // Read state directly from DB for authoritative player list
-    supabase
-      .from("game_room_players")
-      .select("*")
-      .eq("room_id", roomId)
-      .then(({ data, error }) => {
-        if (error) return;
+  // ── advanceRound (shared by timer and sendGuess) ─────────────
+  const advanceRound = useCallback(async (roomId: string) => {
+    if (advanceCalledRef.current) return;
+    advanceCalledRef.current = true;
+
+    const { data } = await supabase.rpc("advance_paint_round", { room_id: roomId });
+    const result = data as any;
+
+    if (!result?.success || !channelRef.current) return;
+
+    if (result.gameEnded) {
+      channelRef.current.broadcast("game-ended", { players: result.scores });
+      // Update local scores
+      if (Array.isArray(result.scores)) {
         setGameState((prev) => ({
           ...prev,
-          players: (data || []).map((p: any) => ({
-            id: p.id,
-            name: p.name,
-            score: p.score,
-            isReady: p.is_ready,
-            avatar: p.avatar,
+          phase: "game-ended",
+          players: result.scores.map((s: any) => ({
+            id: s.id,
+            name: s.name,
+            score: s.score,
+            isReady: false,
           })),
         }));
-      });
-  }
+      }
+      return;
+    }
+
+    // Round ended
+    channelRef.current.broadcast("round-ended", {
+      word: result.previousWord || "",
+      roundNumber: result.roundNumber - 1,
+      players: result.players,
+    });
+
+    // 3-second delay then start next round
+    await new Promise((r) => setTimeout(r, 3000));
+
+    // Verify still in room (not left during delay)
+    if (!channelRef.current || channelRef.current.id !== roomId) return;
+
+    channelRef.current.broadcast("round-started", {
+      drawer: result.drawer,
+      roundTime: result.roundTime,
+      roundNumber: result.roundNumber,
+      word: result.word,
+      deadlineAt: result.deadlineAt
+        ? new Date(result.deadlineAt).getTime()
+        : Date.now() + result.roundTime * 1000,
+    });
+
+    channelRef.current.broadcast("canvas-cleared", {});
+  }, []);
+
+  // ── Timer (client-side countdown from server deadline) ───────
+  useEffect(() => {
+    const deadline = gameState.round.deadlineAt;
+    if (!deadline || gameState.phase !== "drawing") {
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
+      return;
+    }
+
+    const tick = () => {
+      const now = Date.now();
+      const remaining = Math.max(0, Math.ceil((deadline - now) / 1000));
+      setGameState((prev) => ({
+        ...prev,
+        round: { ...prev.round, timeLeft: remaining },
+      }));
+
+      if (remaining <= 0 && gameState.roomId && !advanceCalledRef.current) {
+        advanceRound(gameState.roomId);
+      }
+    };
+
+    tick(); // immediate first tick
+    if (timerRef.current) clearInterval(timerRef.current);
+    timerRef.current = window.setInterval(tick, 1000);
+
+    return () => {
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
+    };
+  }, [gameState.round.deadlineAt, gameState.phase, gameState.roomId, advanceRound]);
 
   // ── Game actions ─────────────────────────────────────────────
 
   const joinRoom = useCallback(async (
     roomId: string,
     playerName: string,
-    _avatar?: string | AvatarConfig,
   ) => {
-    const channel = subscribeToRoom(roomId);
+    subscribeToRoom(roomId);
 
+    // Set roomId synchronously so entry.tsx can transition the view
     setGameState((prev) => ({
       ...prev,
       roomId,
       playerName,
     }));
 
-    // Get current room state from server
+    // Fetch authoritative room state
     const { data } = await supabase.rpc("get_paint_room_state", { room_id: roomId });
     const state = data as any;
 
-    if (state?.success && state.room) {
-      setGameState((prev) => ({
-        ...prev,
-        roomId,
-        playerName,
-        ownerId: state.room.ownerId,
-        players: (state.players || []).map((p: any) => ({
-          id: p.id,
-          name: p.name,
-          score: p.score,
-          isReady: p.isReady,
-          avatar: p.avatar,
-        })),
-        phase: state.room.isGameActive ? "drawing" : "lobby",
-        maxRounds: state.room.maxRounds,
-        round: {
-          ...prev.round,
-          number: state.room.roundNumber,
-          timeLeft: state.room.roundTime,
-          roundTime: state.room.roundTime,
-          deadlineAt: state.room.deadlineAt,
-        },
-      }));
+    if (!state?.success || !state.room) return;
+
+    // Find selfId: first try userId field from DB, fall back to matching by name
+    let selfId: string | null = null;
+    const { data: authData } = await supabase.auth.getUser();
+    const authUserId = authData.user?.id;
+
+    const players = (state.players || []).map((p: any) => {
+      if (authUserId && p.userId === authUserId) selfId = p.id;
+      return {
+        id: p.id,
+        name: p.name,
+        score: p.score,
+        isReady: p.isReady ?? false,
+        avatar: p.avatar,
+      };
+    });
+
+    // Fallback: match by playerName if userId didn't match
+    if (!selfId) {
+      const byName = players.find(
+        (p: any) => p.name.toLowerCase() === playerName.toLowerCase(),
+      );
+      if (byName) selfId = byName.id;
     }
+
+    // Use server deadline if available, otherwise compute from roundTime
+    const serverDeadline = state.room.deadlineAt;
+    const computedDeadline = serverDeadline
+      ? serverDeadline  // server already returns epoch ms
+      : state.room.isGameActive
+        ? Date.now() + state.room.roundTime * 1000
+        : null;
+
+    setGameState((prev) => ({
+      ...prev,
+      roomId,
+      playerName,
+      selfId,
+      ownerId: state.room.ownerId,
+      players,
+      phase: state.room.isGameActive ? "drawing" : "lobby",
+      maxRounds: state.room.maxRounds,
+      round: {
+        ...prev.round,
+        number: state.room.roundNumber,
+        timeLeft: state.room.roundTime,
+        roundTime: state.room.roundTime,
+        deadlineAt: computedDeadline,
+      },
+    }));
+
+    // Broadcast arrival to other players
+    channelRef.current?.broadcast("player-joined", {
+      playerName,
+      playerId: selfId,
+    });
   }, [subscribeToRoom]);
 
   const createRoom = useCallback(async (
@@ -354,23 +472,26 @@ export function GameProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const leaveRoom = useCallback(() => {
-    if (gameState.roomId) {
-      const roomId = gameState.roomId;
-      void (async () => {
-        try {
-          await supabase.rpc("leave_paint_room", {
-            room_id: roomId,
-          });
-        } catch {
-          // Best-effort cleanup; local state is reset regardless.
-        }
-      })();
+    const roomId = gameState.roomId;
+    if (roomId && channelRef.current) {
+      channelRef.current.broadcast("player-left", {
+        playerName: gameState.playerName,
+        playerId: gameState.selfId,
+      });
+      channelRef.current.unsubscribe();
+      channelRef.current = null;
+      // Best-effort server cleanup
+      supabase.rpc("leave_paint_room", { room_id: roomId }).catch(() => {});
       leaveRoomChannel(roomId);
     }
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+    advanceCalledRef.current = false;
     setGameState(createInitialGameState());
     setChatMessages([]);
-    setChannel(null);
-  }, [gameState.roomId, leaveRoomChannel]);
+  }, [gameState.roomId, gameState.playerName, gameState.selfId, leaveRoomChannel]);
 
   const startGame = useCallback(async () => {
     if (!gameState.roomId || !channelRef.current) return;
@@ -385,20 +506,25 @@ export function GameProvider({ children }: { children: ReactNode }) {
     }
 
     const result = data as any;
+    // Convert server TIMESTAMPTZ to epoch ms
+    const deadlineMs = result.deadlineAt
+      ? new Date(result.deadlineAt).getTime()
+      : Date.now() + result.roundTime * 1000;
 
-    // Broadcast to all players
     channelRef.current.broadcast("game-started", {
       drawer: result.drawer,
       roundTime: result.roundTime,
       roundNumber: result.roundNumber,
-      deadlineAt: Date.now() + result.roundTime * 1000,
+      word: result.word,
+      deadlineAt: deadlineMs,
     });
 
     channelRef.current.broadcast("round-started", {
       drawer: result.drawer,
       roundTime: result.roundTime,
       roundNumber: result.roundNumber,
-      deadlineAt: Date.now() + result.roundTime * 1000,
+      word: result.word,
+      deadlineAt: deadlineMs,
     });
 
     channelRef.current.broadcast("canvas-cleared", {});
@@ -406,11 +532,6 @@ export function GameProvider({ children }: { children: ReactNode }) {
     setGameState((prev) => ({
       ...prev,
       phase: "drawing",
-      players: prev.players.map((p) => ({
-        ...p,
-        hasGuessed: false,
-        isReady: false,
-      })),
       round: {
         number: 1,
         drawer: result.drawer,
@@ -419,7 +540,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
         timeLeft: result.roundTime,
         roundTime: result.roundTime,
         winner: null,
-        deadlineAt: Date.now() + result.roundTime * 1000,
+        deadlineAt: deadlineMs,
       },
     }));
     toast.info(`Your word: ${result.word}`);
@@ -433,13 +554,21 @@ export function GameProvider({ children }: { children: ReactNode }) {
       is_ready: isReady,
     });
 
+    // Optimistic local update
+    setGameState((prev) => ({
+      ...prev,
+      players: prev.players.map((p) =>
+        p.id === prev.selfId ? { ...p, isReady } : p,
+      ),
+    }));
+
     channelRef.current.broadcast("player-ready", { isReady });
+    // Also refresh from server to keep everyone in sync
     fetchRoomPlayers(gameState.roomId);
-  }, [gameState.roomId, fetchRoomPlayers]);
+  }, [gameState.roomId, gameState.selfId, fetchRoomPlayers]);
 
   const updateAvatar = useCallback((_avatar: string | AvatarConfig) => {
-    // Avatar is stored client-side in localStorage; the old server stored it
-    // in the backend profiles table. For now this is a no-op on the server side.
+    // Avatar is stored client-side in localStorage/profile table
   }, []);
 
   const sendGuess = useCallback(async (guess: string) => {
@@ -451,22 +580,25 @@ export function GameProvider({ children }: { children: ReactNode }) {
     });
 
     const result = data as any;
-    const player = gameState.players.find((p) => {
-      return p.id === gameState.selfId;
-    }) || { id: gameState.selfId || "", name: gameState.playerName };
+    const player = gameState.players.find((p) => p.id === gameState.selfId)
+      || { id: gameState.selfId || "", name: gameState.playerName };
 
     if (result?.correct) {
       channelRef.current.broadcast("correct-guess", {
-        player,
-        points: result.points,
+        player, points: result.points,
       });
+
+      // Check if all guessers finished
+      const { data: allDone } = await supabase.rpc("all_guessers_finished", {
+        room_id: gameState.roomId,
+      });
+      if (allDone) {
+        advanceRound(gameState.roomId);
+      }
     } else if (!result?.already_guessed) {
-      channelRef.current.broadcast("wrong-guess", {
-        player,
-        guess,
-      });
+      channelRef.current.broadcast("wrong-guess", { player, guess });
     }
-  }, [gameState.roomId, gameState.players, gameState.selfId, gameState.playerName]);
+  }, [gameState.roomId, gameState.players, gameState.selfId, gameState.playerName, advanceRound]);
 
   const sendChatMessage = useCallback((message: string) => {
     if (!channelRef.current) return;
@@ -474,9 +606,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
       || { id: gameState.selfId || "", name: gameState.playerName };
 
     channelRef.current.broadcast("chat-message", {
-      player,
-      message,
-      timestamp: Date.now(),
+      player, message, timestamp: Date.now(),
     });
   }, [gameState.players, gameState.selfId, gameState.playerName]);
 
@@ -486,7 +616,6 @@ export function GameProvider({ children }: { children: ReactNode }) {
       && gameState.round.drawer?.id === gameState.selfId;
     if (!isDrawer) return;
 
-    // Map Fabric.js event types to broadcast events
     if (event.type === "path-start") {
       channelRef.current.broadcast("drawing:path-start", event);
     } else if (event.type === "path-update") {
@@ -506,63 +635,6 @@ export function GameProvider({ children }: { children: ReactNode }) {
     channelRef.current.broadcast("canvas-cleared", {});
   }, [gameState.selfId, gameState.round.drawer]);
 
-  // ── Timer (client-side countdown from server deadline) ───────
-  useEffect(() => {
-    const deadline = gameState.round.deadlineAt;
-    if (!deadline || gameState.phase !== "drawing") return;
-
-    const tick = () => {
-      const now = Date.now();
-      const remaining = Math.max(0, Math.ceil((deadline - now) / 1000));
-      setGameState((prev) => ({
-        ...prev,
-        round: { ...prev.round, timeLeft: remaining },
-      }));
-
-      if (remaining <= 0) {
-        // Round ended by timeout — trigger advance
-        if (gameState.roomId) {
-          advanceRound(gameState.roomId);
-        }
-      }
-    };
-
-    tick();
-    const interval = setInterval(tick, 1000);
-    return () => clearInterval(interval);
-  }, [gameState.round.deadlineAt, gameState.phase]);
-
-  const advanceRound = useCallback(async (roomId: string) => {
-    const { data } = await supabase.rpc("advance_paint_round", { room_id: roomId });
-    const result = data as any;
-
-    if (!result?.success || !channelRef.current) return;
-
-    if (result.gameEnded) {
-      channelRef.current.broadcast("game-ended", {
-        scores: result.scores,
-      });
-    } else {
-      // Get the previous word from the response
-      await new Promise((r) => setTimeout(r, 3000)); // 3s delay between rounds
-
-      channelRef.current.broadcast("round-ended", {
-        word: result.previousWord || "",
-        roundNumber: result.roundNumber - 1,
-      });
-
-      // After delay, start next round
-      channelRef.current.broadcast("round-started", {
-        drawer: result.drawer,
-        roundTime: result.roundTime,
-        roundNumber: result.roundNumber,
-        deadlineAt: Date.now() + result.roundTime * 1000,
-      });
-
-      channelRef.current.broadcast("canvas-cleared", {});
-    }
-  }, []);
-
   // ── Computed values ──────────────────────────────────────────
   const isGameActive = gameState.phase !== "lobby" && gameState.phase !== "game-ended";
   const isDrawer = gameState.selfId !== null
@@ -579,28 +651,12 @@ export function GameProvider({ children }: { children: ReactNode }) {
     <GameContext.Provider
       value={{
         gameState,
-        isGameActive,
-        isDrawer,
-        currentDrawer,
-        currentWord,
-        roundNumber,
-        timeLeft,
-        roundTime,
-        revealedWord,
-        roundWinner,
-        channel,
-        isConnected,
-        joinRoom,
-        createRoom,
-        leaveRoom,
-        startGame,
-        setReadyState,
-        updateAvatar,
-        sendGuess,
-        sendChatMessage,
-        sendDrawingEvent,
-        clearCanvas,
-        chatMessages,
+        isGameActive, isDrawer, currentDrawer, currentWord,
+        roundNumber, timeLeft, roundTime, revealedWord, roundWinner,
+        channel: channelRef.current, isConnected,
+        joinRoom, createRoom, leaveRoom, startGame, setReadyState,
+        updateAvatar, sendGuess, sendChatMessage, sendDrawingEvent,
+        clearCanvas, chatMessages,
       }}
     >
       {children}
