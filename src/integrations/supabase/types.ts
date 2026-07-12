@@ -14,6 +14,264 @@ export type Database = {
   }
   public: {
     Tables: {
+      balderdash_options: {
+        Row: {
+          answer: string
+          created_at: string
+          id: string
+          is_correct: boolean
+          player_id: string | null
+          room_id: string
+          round_number: number
+          sort_order: number
+        }
+        Insert: {
+          answer: string
+          created_at?: string
+          id?: string
+          is_correct?: boolean
+          player_id?: string | null
+          room_id: string
+          round_number: number
+          sort_order?: number
+        }
+        Update: {
+          answer?: string
+          created_at?: string
+          id?: string
+          is_correct?: boolean
+          player_id?: string | null
+          room_id?: string
+          round_number?: number
+          sort_order?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "balderdash_options_player_id_fkey"
+            columns: ["player_id"]
+            isOneToOne: false
+            referencedRelation: "balderdash_players"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "balderdash_options_room_id_fkey"
+            columns: ["room_id"]
+            isOneToOne: false
+            referencedRelation: "balderdash_rooms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      balderdash_players: {
+        Row: {
+          avatar: Json | null
+          id: string
+          is_connected: boolean
+          is_ready: boolean
+          joined_at: string
+          name: string
+          room_id: string
+          score: number
+          user_id: string
+        }
+        Insert: {
+          avatar?: Json | null
+          id?: string
+          is_connected?: boolean
+          is_ready?: boolean
+          joined_at?: string
+          name: string
+          room_id: string
+          score?: number
+          user_id: string
+        }
+        Update: {
+          avatar?: Json | null
+          id?: string
+          is_connected?: boolean
+          is_ready?: boolean
+          joined_at?: string
+          name?: string
+          room_id?: string
+          score?: number
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "balderdash_players_room_id_fkey"
+            columns: ["room_id"]
+            isOneToOne: false
+            referencedRelation: "balderdash_rooms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      balderdash_prompts: {
+        Row: {
+          correct_answer: string
+          deck: string
+          id: string
+          term: string
+        }
+        Insert: {
+          correct_answer: string
+          deck: string
+          id?: string
+          term: string
+        }
+        Update: {
+          correct_answer?: string
+          deck?: string
+          id?: string
+          term?: string
+        }
+        Relationships: []
+      }
+      balderdash_rooms: {
+        Row: {
+          created_at: string
+          current_prompt_id: string | null
+          deck: string | null
+          id: string
+          last_activity_at: string
+          max_players: number
+          max_rounds: number
+          name: string
+          owner_id: string
+          phase: string
+          room_code: string
+          round_number: number
+          selector_player_id: string | null
+          updated_at: string
+          used_prompt_ids: string[]
+        }
+        Insert: {
+          created_at?: string
+          current_prompt_id?: string | null
+          deck?: string | null
+          id?: string
+          last_activity_at?: string
+          max_players?: number
+          max_rounds?: number
+          name: string
+          owner_id: string
+          phase?: string
+          room_code: string
+          round_number?: number
+          selector_player_id?: string | null
+          updated_at?: string
+          used_prompt_ids?: string[]
+        }
+        Update: {
+          created_at?: string
+          current_prompt_id?: string | null
+          deck?: string | null
+          id?: string
+          last_activity_at?: string
+          max_players?: number
+          max_rounds?: number
+          name?: string
+          owner_id?: string
+          phase?: string
+          room_code?: string
+          round_number?: number
+          selector_player_id?: string | null
+          updated_at?: string
+          used_prompt_ids?: string[]
+        }
+        Relationships: []
+      }
+      balderdash_submissions: {
+        Row: {
+          answer: string
+          created_at: string
+          id: string
+          player_id: string
+          room_id: string
+          round_number: number
+        }
+        Insert: {
+          answer: string
+          created_at?: string
+          id?: string
+          player_id: string
+          room_id: string
+          round_number: number
+        }
+        Update: {
+          answer?: string
+          created_at?: string
+          id?: string
+          player_id?: string
+          room_id?: string
+          round_number?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "balderdash_submissions_player_id_fkey"
+            columns: ["player_id"]
+            isOneToOne: false
+            referencedRelation: "balderdash_players"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "balderdash_submissions_room_id_fkey"
+            columns: ["room_id"]
+            isOneToOne: false
+            referencedRelation: "balderdash_rooms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      balderdash_votes: {
+        Row: {
+          created_at: string
+          id: string
+          option_id: string
+          player_id: string
+          room_id: string
+          round_number: number
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          option_id: string
+          player_id: string
+          room_id: string
+          round_number: number
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          option_id?: string
+          player_id?: string
+          room_id?: string
+          round_number?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "balderdash_votes_option_id_fkey"
+            columns: ["option_id"]
+            isOneToOne: false
+            referencedRelation: "balderdash_options"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "balderdash_votes_player_id_fkey"
+            columns: ["player_id"]
+            isOneToOne: false
+            referencedRelation: "balderdash_players"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "balderdash_votes_room_id_fkey"
+            columns: ["room_id"]
+            isOneToOne: false
+            referencedRelation: "balderdash_rooms"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       game_canvas_checkpoints: {
         Row: {
           created_at: string
@@ -377,6 +635,18 @@ export type Database = {
     Functions: {
       advance_paint_round: { Args: { room_id: string }; Returns: Json }
       all_guessers_finished: { Args: { room_id: string }; Returns: boolean }
+      choose_balderdash_deck: {
+        Args: { p_deck: string; p_room_id: string }
+        Returns: Json
+      }
+      create_balderdash_room: {
+        Args: {
+          p_max_players?: number
+          p_max_rounds?: number
+          p_room_name?: string
+        }
+        Returns: Json
+      }
       create_paint_room: {
         Args: {
           max_players?: number
@@ -387,7 +657,9 @@ export type Database = {
         }
         Returns: Json
       }
+      generate_balderdash_code: { Args: never; Returns: string }
       generate_game_pin: { Args: never; Returns: string }
+      get_balderdash_room_state: { Args: { p_room_id: string }; Returns: Json }
       get_canvas_checkpoint: {
         Args: { room_id: string; round_number: number }
         Returns: Json
@@ -401,19 +673,35 @@ export type Database = {
         }
         Returns: boolean
       }
+      join_balderdash_room: { Args: { p_room_code: string }; Returns: Json }
       join_paint_room: { Args: { game_pin: string }; Returns: Json }
+      leave_balderdash_room: { Args: { p_room_id: string }; Returns: Json }
       leave_paint_room: { Args: { room_id: string }; Returns: Json }
+      next_balderdash_round: { Args: { p_room_id: string }; Returns: Json }
       save_canvas_checkpoint: {
         Args: { fabric_json: Json; room_id: string; round_number: number }
+        Returns: Json
+      }
+      set_balderdash_ready: {
+        Args: { p_is_ready: boolean; p_room_id: string }
         Returns: Json
       }
       set_player_ready: {
         Args: { is_ready: boolean; room_id: string }
         Returns: Json
       }
+      start_balderdash_room: { Args: { p_room_id: string }; Returns: Json }
       start_paint_game: { Args: { room_id: string }; Returns: Json }
+      submit_balderdash_answer: {
+        Args: { p_answer: string; p_room_id: string }
+        Returns: Json
+      }
       submit_paint_guess: {
         Args: { guess: string; room_id: string }
+        Returns: Json
+      }
+      vote_balderdash_answer: {
+        Args: { p_option_id: string; p_room_id: string }
         Returns: Json
       }
     }
