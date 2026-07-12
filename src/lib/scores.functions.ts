@@ -42,13 +42,33 @@ type GameScoreRow = {
 };
 
 export const getGlobalLeaderboard = createServerFn({ method: "GET" }).handler(async () => {
+  console.log("[Leaderboard:getGlobalLeaderboard] fetching rows", {
+    hasSupabaseUrl: Boolean(process.env.SUPABASE_URL),
+    hasPublishableKey: Boolean(process.env.SUPABASE_PUBLISHABLE_KEY),
+    limit: 100,
+  });
+
   const supabase = publicClient();
   const { data, error } = await supabase
     .from("game_scores")
     .select("id, score, created_at, user_id, games(slug, title), profiles(username)")
     .order("score", { ascending: false })
     .limit(100);
-  if (error) throw new Error(error.message);
+  if (error) {
+    console.error("[Leaderboard:getGlobalLeaderboard] Supabase query failed", {
+      message: error.message,
+      code: error.code,
+      details: error.details,
+      hint: error.hint,
+    });
+    throw new Error(error.message);
+  }
+
+  console.log("[Leaderboard:getGlobalLeaderboard] fetched rows", {
+    rowCount: data?.length ?? 0,
+    firstRow: data?.[0] ?? null,
+  });
+
   return ((data ?? []) as unknown as GlobalScoreRow[]).map((row) => ({
     id: row.id,
     score: row.score,

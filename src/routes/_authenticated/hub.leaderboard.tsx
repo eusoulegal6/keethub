@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { queryOptions, useSuspenseQuery } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
+import { queryOptions, useQuery } from "@tanstack/react-query";
+import { useEffect, useMemo, useState } from "react";
 import { CalendarDays, ChevronDown, ChevronRight, Sparkles, Star, Trophy } from "lucide-react";
 import { getGlobalLeaderboard, type LeaderboardEntry } from "@/lib/scores.functions";
 import { getDiceBearAvatarUrlFromSeed } from "@/lib/avatar/dicebear/api";
@@ -87,13 +87,19 @@ export const Route = createFileRoute("/_authenticated/hub/leaderboard")({
       },
     ],
   }),
-  loader: ({ context }) => context.queryClient.ensureQueryData(leaderboardQuery),
   component: LeaderboardPage,
 });
 
 function LeaderboardPage() {
   const { user } = useAuth();
-  const { data: rows } = useSuspenseQuery(leaderboardQuery);
+  const {
+    data: rows = [],
+    error,
+    isError,
+    isFetching,
+    isLoading,
+    status,
+  } = useQuery(leaderboardQuery);
   const [selectedRangeIndex, setSelectedRangeIndex] = useState(0);
   const [rangeMenuOpen, setRangeMenuOpen] = useState(false);
   const [selectedRank, setSelectedRank] = useState(1);
@@ -105,6 +111,47 @@ function LeaderboardPage() {
   const yourStanding = standings.find((standing) => standing.userId === user?.id) ?? null;
   const podium = standings.slice(0, 3);
   const tableRows = standings.slice(3, 10);
+
+  useEffect(() => {
+    const querySnapshot = {
+      status,
+      isLoading,
+      isFetching,
+      isError,
+      errorMessage: error ? getErrorMessage(error) : null,
+      rawRowCount: rows.length,
+      rawRows: rows,
+    };
+
+    console.log("[Leaderboard] global leaderboard query", querySnapshot);
+
+    if (error) {
+      console.error("[Leaderboard] global leaderboard query failed", error);
+    }
+  }, [error, isError, isFetching, isLoading, rows, status]);
+
+  useEffect(() => {
+    console.log("[Leaderboard] derived profile standings", {
+      selectedRange,
+      selectedRangeIndex,
+      loggedInUserId: user?.id ?? null,
+      standingsCount: standings.length,
+      standings,
+      podium,
+      tableRows,
+      selectedStanding,
+      yourStanding,
+    });
+  }, [
+    podium,
+    selectedRange,
+    selectedRangeIndex,
+    selectedStanding,
+    standings,
+    tableRows,
+    user?.id,
+    yourStanding,
+  ]);
 
   return (
     <div className="min-h-[calc(100vh-3.5rem)] overflow-hidden bg-[#fffaf6] text-[#201447]">
@@ -127,7 +174,11 @@ function LeaderboardPage() {
             }}
           />
 
-          {standings.length === 0 ? (
+          {isLoading ? (
+            <LoadingState />
+          ) : isError ? (
+            <ErrorState error={error} />
+          ) : standings.length === 0 ? (
             <EmptyState selectedRange={selectedRange} />
           ) : (
             <>
@@ -510,6 +561,38 @@ function LeaderboardTableRow({
   );
 }
 
+function LoadingState() {
+  return (
+    <div className="relative z-10 rounded-[30px] border border-white bg-white/82 px-8 py-16 text-center shadow-[0_24px_54px_rgba(94,79,139,0.14)]">
+      <div className="leaderboard-medal mx-auto mb-6 grid h-20 w-20 place-items-center rounded-[28px] bg-[#f2ebff]">
+        <Trophy className="h-10 w-10 text-[#7358d7]" />
+      </div>
+      <h2 className="text-3xl font-black text-[#17123d]">Loading leaderboard</h2>
+      <p className="mx-auto mt-3 max-w-md text-base font-medium text-[#655f91]">
+        Fetching score rows and building profile standings.
+      </p>
+    </div>
+  );
+}
+
+function ErrorState({ error }: { error: unknown }) {
+  const message = getErrorMessage(error);
+
+  return (
+    <div className="relative z-10 rounded-[30px] border border-[#ffc8d2] bg-white/86 px-8 py-16 text-center shadow-[0_24px_54px_rgba(94,79,139,0.14)]">
+      <div className="mx-auto mb-6 grid h-20 w-20 place-items-center rounded-[28px] bg-[#ffe8ef]">
+        <Trophy className="h-10 w-10 text-[#c84d73]" />
+      </div>
+      <h2 className="text-3xl font-black text-[#17123d]">Leaderboard failed to load</h2>
+      <p className="mx-auto mt-3 max-w-xl text-base font-medium text-[#7a4a62]">{message}</p>
+      <p className="mx-auto mt-4 max-w-xl text-sm font-semibold text-[#8b78a4]">
+        Browser console includes the query state, raw error, logged-in user id, and derived
+        standings snapshot.
+      </p>
+    </div>
+  );
+}
+
 function EmptyState({ selectedRange }: { selectedRange: DateRange }) {
   return (
     <div className="relative z-10 rounded-[30px] border border-white bg-white/82 px-8 py-16 text-center shadow-[0_24px_54px_rgba(94,79,139,0.14)]">
@@ -643,6 +726,16 @@ function buildStandings(rows: LeaderboardEntry[], range: DateRange) {
 
 function formatPoints(points: number) {
   return points.toLocaleString("en-US");
+}
+
+function getErrorMessage(error: unknown) {
+  if (error instanceof Error) return error.message;
+  if (typeof error === "string") return error;
+  try {
+    return JSON.stringify(error);
+  } catch {
+    return "Unknown leaderboard error";
+  }
 }
 
 function LeaderboardMotionStyles() {
