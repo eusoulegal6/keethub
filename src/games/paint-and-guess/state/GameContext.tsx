@@ -481,7 +481,13 @@ export function GameProvider({ children }: { children: ReactNode }) {
       channelRef.current.unsubscribe();
       channelRef.current = null;
       // Best-effort server cleanup
-      supabase.rpc("leave_paint_room", { room_id: roomId }).catch(() => {});
+      void (async () => {
+        try {
+          await supabase.rpc("leave_paint_room", { room_id: roomId });
+        } catch {
+          // Ignore best-effort cleanup failures during local leave.
+        }
+      })();
       leaveRoomChannel(roomId);
     }
     if (timerRef.current) {
