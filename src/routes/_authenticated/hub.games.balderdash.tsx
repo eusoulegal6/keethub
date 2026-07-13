@@ -1,4 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { FormEvent, ReactNode } from "react";
 import type { RealtimeChannel } from "@supabase/supabase-js";
@@ -11,6 +13,14 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { supabase } from "@/integrations/supabase/client";
+import { getGameBySlug } from "@/lib/games.functions";
+import { submitScore } from "@/lib/scores.functions";
+
+const balderdashGameQuery = {
+  queryKey: ["game", "balderdash"],
+  queryFn: () => getGameBySlug({ data: { slug: "balderdash" } }),
+  staleTime: 60_000,
+};
 
 export const Route = createFileRoute("/_authenticated/hub/games/balderdash")({
   ssr: false,
@@ -115,11 +125,15 @@ async function callRpc<T>(fn: string, args?: Record<string, unknown>): Promise<R
 }
 
 function BalderdashRoute() {
+  const queryClient = useQueryClient();
+  const submitScoreFn = useServerFn(submitScore);
+  const { data: game } = useQuery(balderdashGameQuery);
   const [roomId, setRoomId] = useState<string | null>(null);
   const [state, setState] = useState<RoomState | null>(null);
   const [loading, setLoading] = useState(true);
   const [action, setAction] = useState<string | null>(null);
   const channelRef = useRef<RealtimeChannel | null>(null);
+  const submittedRoomRef = useRef<string | null>(null);
 
   const loadState = useCallback(async (id: string) => {
     setLoading(true);
@@ -175,6 +189,45 @@ function BalderdashRoute() {
     }, 3000);
     return () => window.clearInterval(timer);
   }, [loadState, roomId]);
+
+  useEffect(() => {
+    if (!state || !game || state.room.phase !== "finished") return;
+    if (submittedRoomRef.current === state.room.id) return;
+
+    const selfPlayer = state.players.find((player) => player.id === state.selfPlayerId);
+    if (!selfPlayer) return;
+
+    submittedRoomRef.current = state.room.id;
+
+    const finalRank =
+      [...state.players]
+        .sort((a, b) => b.score - a.score)
+        .findIndex((player) => player.id === selfPlayer.id) + 1;
+
+    void (async () => {
+      try {
+        await submitScoreFn({
+          data: {
+            gameId: game.id,
+            score: selfPlayer.score,
+            metadata: {
+              roomId: state.room.id,
+              roomCode: state.room.code,
+              finalRank,
+              playerCount: state.players.length,
+              maxRounds: state.room.maxRounds,
+            },
+          },
+        });
+        queryClient.invalidateQueries({ queryKey: ["game-leaderboard", game.id] });
+        queryClient.invalidateQueries({ queryKey: ["global-leaderboard"] });
+        toast.success("Final score submitted to leaderboard");
+      } catch (error) {
+        submittedRoomRef.current = null;
+        toast.error(error instanceof Error ? error.message : "Failed to submit final score");
+      }
+    })();
+  }, [game, queryClient, state, submitScoreFn]);
 
   const notifyRoom = useCallback(() => {
     void channelRef.current?.send({

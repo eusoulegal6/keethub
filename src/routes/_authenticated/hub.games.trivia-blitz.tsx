@@ -65,6 +65,7 @@ function TriviaBlitzRoute() {
       setSubmitted(true);
       toast.success("Score submitted!");
       queryClient.invalidateQueries({ queryKey: ["game-leaderboard", game.id] });
+      queryClient.invalidateQueries({ queryKey: ["global-leaderboard"] });
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Failed to submit score");
     } finally {

@@ -136,17 +136,14 @@ function PingPongGame() {
   }, []);
 
   // ── Touch ────────────────────────────────────────────────────────
-  const handleTouchMove = useCallback(
-    (e: React.TouchEvent<HTMLCanvasElement>) => {
-      const canvas = canvasRef.current;
-      if (!canvas) return;
-      const rect = canvas.getBoundingClientRect();
-      const scaleY = H / rect.height;
-      const y = (e.touches[0].clientY - rect.top) * scaleY;
-      gs.current.touchY = Math.max(0, Math.min(H, y));
-    },
-    [],
-  );
+  const handleTouchMove = useCallback((e: React.TouchEvent<HTMLCanvasElement>) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const rect = canvas.getBoundingClientRect();
+    const scaleY = H / rect.height;
+    const y = (e.touches[0].clientY - rect.top) * scaleY;
+    gs.current.touchY = Math.max(0, Math.min(H, y));
+  }, []);
 
   const handleTouchEnd = useCallback(() => {
     gs.current.touchY = null;
@@ -232,12 +229,7 @@ function PingPongGame() {
       }
 
       // Left paddle collision
-      if (
-        s.bx <= PADDLE_W &&
-        s.by + BALL >= s.p1Y &&
-        s.by <= s.p1Y + PADDLE_H &&
-        s.bvx < 0
-      ) {
+      if (s.bx <= PADDLE_W && s.by + BALL >= s.p1Y && s.by <= s.p1Y + PADDLE_H && s.bvx < 0) {
         s.bvx = Math.abs(s.bvx) * 1.04; // speed up slightly per hit
         // Adjust Y angle based on where ball hit the paddle
         const hitPos = (s.by + BALL / 2 - (s.p1Y + PADDLE_H / 2)) / (PADDLE_H / 2);
@@ -349,6 +341,7 @@ function PingPongGame() {
     onSuccess: () => {
       toast.success("Score submitted!");
       queryClient.invalidateQueries({ queryKey: ["game-leaderboard", game.id] });
+      queryClient.invalidateQueries({ queryKey: ["global-leaderboard"] });
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -382,9 +375,7 @@ function PingPongGame() {
           <Badge variant="secondary" className="mb-4">
             {game.category}
           </Badge>
-          <h1 className="text-4xl md:text-5xl font-extrabold tracking-tight mb-2">
-            {game.title}
-          </h1>
+          <h1 className="text-4xl md:text-5xl font-extrabold tracking-tight mb-2">{game.title}</h1>
           <p className="text-muted-foreground mb-8">{game.description}</p>
 
           {/* Mode picker */}
@@ -413,21 +404,21 @@ function PingPongGame() {
               <>
                 <p>
                   <kbd className="px-1.5 py-0.5 rounded bg-secondary text-xs font-mono">W</kbd>{" "}
-                  <kbd className="px-1.5 py-0.5 rounded bg-secondary text-xs font-mono">S</kbd>{" "}
-                  — {p1Label} (left)
+                  <kbd className="px-1.5 py-0.5 rounded bg-secondary text-xs font-mono">S</kbd> —{" "}
+                  {p1Label} (left)
                 </p>
                 <p>
                   <kbd className="px-1.5 py-0.5 rounded bg-secondary text-xs font-mono">↑</kbd>{" "}
-                  <kbd className="px-1.5 py-0.5 rounded bg-secondary text-xs font-mono">↓</kbd>{" "}
-                  — {p2Label} (right)
+                  <kbd className="px-1.5 py-0.5 rounded bg-secondary text-xs font-mono">↓</kbd> —{" "}
+                  {p2Label} (right)
                 </p>
               </>
             ) : (
               <>
                 <p>
                   <kbd className="px-1.5 py-0.5 rounded bg-secondary text-xs font-mono">W</kbd>{" "}
-                  <kbd className="px-1.5 py-0.5 rounded bg-secondary text-xs font-mono">S</kbd>{" "}
-                  or touch — You (right)
+                  <kbd className="px-1.5 py-0.5 rounded bg-secondary text-xs font-mono">S</kbd> or
+                  touch — You (right)
                 </p>
                 <p className="text-muted-foreground">AI controls left paddle</p>
               </>
@@ -463,9 +454,7 @@ function PingPongGame() {
         <div className="flex items-center gap-6">
           <div className="text-center">
             <p className="text-xs text-muted-foreground">{p1Label}</p>
-            <p className="text-2xl font-bold tabular-nums text-muted-foreground">
-              {opponentScore}
-            </p>
+            <p className="text-2xl font-bold tabular-nums text-muted-foreground">{opponentScore}</p>
           </div>
           <span className="text-muted-foreground text-lg">—</span>
           <div className="text-center">
