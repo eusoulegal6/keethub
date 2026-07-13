@@ -17,7 +17,7 @@ export default function QuestionView() {
 
   const question = questions[currentIndex];
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const hasAnswered = selectedOptionId !== null;
+  const hasAnswered = selectedOptionId !== null || lastResult !== null;
 
   useEffect(() => {
     intervalRef.current = setInterval(() => tick(), 1000);
@@ -47,12 +47,11 @@ export default function QuestionView() {
         </span>
         <div className="flex items-center gap-3">
           {streak > 1 && (
-            <span className="text-sm font-semibold text-warning">
-              {streak}x streak
-            </span>
+            <span className="text-sm font-semibold text-warning">{streak}x streak</span>
           )}
           <span className="text-sm text-muted-foreground">
-            Score: <span className="font-bold text-foreground tabular-nums">{score.toLocaleString()}</span>
+            Score:{" "}
+            <span className="font-bold text-foreground tabular-nums">{score.toLocaleString()}</span>
           </span>
         </div>
       </div>

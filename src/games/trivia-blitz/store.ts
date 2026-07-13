@@ -9,6 +9,21 @@ const REVEAL_DELAY_MS = 3000;
 const SCORING_DELAY_MS = 2000;
 const BASE_POINTS = 1000;
 
+const scheduledTimers = new Set<ReturnType<typeof setTimeout>>();
+
+function schedule(callback: () => void, delay: number): void {
+  const timer = setTimeout(() => {
+    scheduledTimers.delete(timer);
+    callback();
+  }, delay);
+  scheduledTimers.add(timer);
+}
+
+function clearScheduledTimers(): void {
+  scheduledTimers.forEach((timer) => clearTimeout(timer));
+  scheduledTimers.clear();
+}
+
 function shuffle<T>(arr: T[]): T[] {
   const a = [...arr];
   for (let i = a.length - 1; i > 0; i--) {
@@ -68,6 +83,7 @@ export const useTriviaStore = create<TriviaState>((set, get) => ({
   availableQuizzes: getAllQuizzes(),
 
   startGame: (quizId: string) => {
+    clearScheduledTimers();
     const allQuestions = getQuestionsByQuizId(quizId);
     const questions = pickRandom(allQuestions, QUESTIONS_PER_GAME);
     set({
@@ -81,12 +97,16 @@ export const useTriviaStore = create<TriviaState>((set, get) => ({
       lastResult: null,
       answers: [],
     });
-    setTimeout(() => get().advanceFromIntro(), INTRO_DELAY_MS);
+    schedule(() => get().advanceFromIntro(), INTRO_DELAY_MS);
   },
 
   advanceFromIntro: () => {
     const { questions, currentIndex } = get();
     const question = questions[currentIndex];
+    if (!question) {
+      set({ phase: "podium" });
+      return;
+    }
     set({
       phase: "question",
       timeLeft: question.timeLimit,
@@ -97,7 +117,8 @@ export const useTriviaStore = create<TriviaState>((set, get) => ({
   },
 
   tick: () => {
-    const { timeLeft } = get();
+    const { phase, timeLeft, lastResult } = get();
+    if (phase !== "question" || lastResult !== null) return;
     if (timeLeft <= 1) {
       get().timeUp();
     } else {
@@ -107,7 +128,8 @@ export const useTriviaStore = create<TriviaState>((set, get) => ({
 
   selectAnswer: (optionId: string) => {
     const state = get();
-    if (state.phase !== "question" || state.selectedOptionId !== null) return;
+    if (state.phase !== "question" || state.selectedOptionId !== null || state.lastResult !== null)
+      return;
     const question = state.questions[state.currentIndex];
     const isCorrect = optionId === question.correctOptionId;
     const elapsedMs = Date.now() - state.questionStartTime;
@@ -127,17 +149,17 @@ export const useTriviaStore = create<TriviaState>((set, get) => ({
       streak: newStreak,
       answers: [...state.answers, answer],
     });
-    setTimeout(() => {
+    schedule(() => {
       const s = get();
       if (s.phase !== "question") return;
       set({ phase: "answer-reveal" });
-      setTimeout(() => get().advanceFromReveal(), REVEAL_DELAY_MS);
+      schedule(() => get().advanceFromReveal(), REVEAL_DELAY_MS);
     }, 800);
   },
 
   timeUp: () => {
     const state = get();
-    if (state.phase !== "question") return;
+    if (state.phase !== "question" || state.lastResult !== null) return;
     const question = state.questions[state.currentIndex];
     const answer: AnswerRecord = {
       questionId: question.id,
@@ -152,17 +174,17 @@ export const useTriviaStore = create<TriviaState>((set, get) => ({
       streak: 0,
       answers: [...state.answers, answer],
     });
-    setTimeout(() => {
+    schedule(() => {
       const s = get();
       if (s.phase !== "question") return;
       set({ phase: "answer-reveal" });
-      setTimeout(() => get().advanceFromReveal(), REVEAL_DELAY_MS);
+      schedule(() => get().advanceFromReveal(), REVEAL_DELAY_MS);
     }, 800);
   },
 
   advanceFromReveal: () => {
     set({ phase: "scoring" });
-    setTimeout(() => get().advanceFromScoring(), SCORING_DELAY_MS);
+    schedule(() => get().advanceFromScoring(), SCORING_DELAY_MS);
   },
 
   advanceFromScoring: () => {
@@ -171,12 +193,18 @@ export const useTriviaStore = create<TriviaState>((set, get) => ({
     if (nextIndex >= questions.length) {
       set({ phase: "podium" });
     } else {
-      set({ phase: "question-intro", currentIndex: nextIndex, selectedOptionId: null, lastResult: null });
-      setTimeout(() => get().advanceFromIntro(), INTRO_DELAY_MS);
+      set({
+        phase: "question-intro",
+        currentIndex: nextIndex,
+        selectedOptionId: null,
+        lastResult: null,
+      });
+      schedule(() => get().advanceFromIntro(), INTRO_DELAY_MS);
     }
   },
 
   reset: () => {
+    clearScheduledTimers();
     set({
       phase: "setup",
       categoryId: null,

@@ -24,7 +24,7 @@ interface PuzzleState {
 
 interface PuzzleActions {
   loadPuzzle: (difficulty?: Puzzle["difficulty"]) => void;
-  onMove: (from: string, to: string) => boolean;
+  onMove: (from: string, to: string, promotion?: string) => boolean;
   resetPuzzle: () => void;
   showHintAction: () => void;
   toggleSolution: () => void;
@@ -64,57 +64,54 @@ export function PuzzleProvider({ children }: { children: React.ReactNode }) {
 
   const pv = useMemo(() => puzzle?.solutionPv ?? [], [puzzle]);
 
-  const loadPuzzle = useCallback(
-    (difficulty?: Puzzle["difficulty"]) => {
-      setLoading(true);
-      setError(null);
+  const loadPuzzle = useCallback((difficulty?: Puzzle["difficulty"]) => {
+    setLoading(true);
+    setError(null);
 
-      // Simulate brief loading for UI feedback
-      setTimeout(() => {
-        const pz = difficulty ? getRandomPuzzle(difficulty) : getRandomPuzzle();
-        if (!pz) {
-          setError("No puzzles found");
-          setLoading(false);
-          return;
-        }
-
-        const playerSideToUse = pz.sideToMove;
-        const solutionPv = pz.solutionPv;
-
-        let initialFen = pz.fen;
-        let initialIdx = 0;
-
-        // Auto-advance if it's not the player's turn first
-        try {
-          const g = new Chess(pz.fen);
-          const fenTurn = g.turn() === "w" ? "white" : "black";
-          if (fenTurn !== playerSideToUse && solutionPv.length > 0) {
-            const nextFen = applyMoveUci(initialFen, solutionPv[0]);
-            if (nextFen) {
-              initialFen = nextFen;
-              initialIdx = 1;
-            }
-          }
-        } catch {}
-
-        setPuzzle(pz);
-        setFen(initialFen);
-        setIdx(initialIdx);
-        setSolved(false);
-        setPlayerSide(playerSideToUse);
-        setMessage(null);
-        setMistakes(0);
-        setHintsUsed(0);
-        setShowSolution(false);
-        setShowHint(false);
+    // Simulate brief loading for UI feedback
+    setTimeout(() => {
+      const pz = difficulty ? getRandomPuzzle(difficulty) : getRandomPuzzle();
+      if (!pz) {
+        setError("No puzzles found");
         setLoading(false);
-      }, 100);
-    },
-    [],
-  );
+        return;
+      }
+
+      const playerSideToUse = pz.sideToMove;
+      const solutionPv = pz.solutionPv;
+
+      let initialFen = pz.fen;
+      let initialIdx = 0;
+
+      // Auto-advance if it's not the player's turn first
+      try {
+        const g = new Chess(pz.fen);
+        const fenTurn = g.turn() === "w" ? "white" : "black";
+        if (fenTurn !== playerSideToUse && solutionPv.length > 0) {
+          const nextFen = applyMoveUci(initialFen, solutionPv[0]);
+          if (nextFen) {
+            initialFen = nextFen;
+            initialIdx = 1;
+          }
+        }
+      } catch {}
+
+      setPuzzle(pz);
+      setFen(initialFen);
+      setIdx(initialIdx);
+      setSolved(false);
+      setPlayerSide(playerSideToUse);
+      setMessage(null);
+      setMistakes(0);
+      setHintsUsed(0);
+      setShowSolution(false);
+      setShowHint(false);
+      setLoading(false);
+    }, 100);
+  }, []);
 
   const onMove = useCallback(
-    (from: string, to: string): boolean => {
+    (from: string, to: string, _promotion?: string): boolean => {
       if (!puzzle || !fen || solved || showSolution) return false;
 
       // Check it's the player's turn
@@ -259,9 +256,27 @@ export function PuzzleProvider({ children }: { children: React.ReactNode }) {
       nextPuzzle,
     }),
     [
-      puzzle, fen, idx, solved, message, showHint, playerSide,
-      loading, error, mistakes, hintsUsed, showSolution, streak, totalSolved, pv,
-      loadPuzzle, onMove, resetPuzzle, showHintAction, toggleSolution, nextPuzzle,
+      puzzle,
+      fen,
+      idx,
+      solved,
+      message,
+      showHint,
+      playerSide,
+      loading,
+      error,
+      mistakes,
+      hintsUsed,
+      showSolution,
+      streak,
+      totalSolved,
+      pv,
+      loadPuzzle,
+      onMove,
+      resetPuzzle,
+      showHintAction,
+      toggleSolution,
+      nextPuzzle,
     ],
   );
 

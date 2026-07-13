@@ -28,7 +28,20 @@ interface SquareProps {
 }
 
 const ChessSquare = memo(
-  ({ name, piece, isSelected, isLegalMove, isLastMove, bg, showRank, showFile, orientation, disabled, sqSize, onClick }: SquareProps) => {
+  ({
+    name,
+    piece,
+    isSelected,
+    isLegalMove,
+    isLastMove,
+    bg,
+    showRank,
+    showFile,
+    orientation,
+    disabled,
+    sqSize,
+    onClick,
+  }: SquareProps) => {
     return (
       <div
         onClick={onClick}
@@ -49,10 +62,14 @@ const ChessSquare = memo(
         {showRank && (
           <span
             style={{
-              position: "absolute", left: 2, top: 2,
-              fontSize: Math.max(8, sqSize * 0.18), fontWeight: 600,
+              position: "absolute",
+              left: 2,
+              top: 2,
+              fontSize: Math.max(8, sqSize * 0.18),
+              fontWeight: 600,
               color: bg === LIGHT ? "#b58863" : "#f0d9b5",
-              pointerEvents: "none", lineHeight: 1,
+              pointerEvents: "none",
+              lineHeight: 1,
             }}
           >
             {name[1]}
@@ -61,10 +78,14 @@ const ChessSquare = memo(
         {showFile && (
           <span
             style={{
-              position: "absolute", bottom: 2, right: 2,
-              fontSize: Math.max(8, sqSize * 0.18), fontWeight: 600,
+              position: "absolute",
+              bottom: 2,
+              right: 2,
+              fontSize: Math.max(8, sqSize * 0.18),
+              fontWeight: 600,
               color: bg === LIGHT ? "#b58863" : "#f0d9b5",
-              pointerEvents: "none", lineHeight: 1,
+              pointerEvents: "none",
+              lineHeight: 1,
             }}
           >
             {name[0]}
@@ -74,8 +95,11 @@ const ChessSquare = memo(
         {isLegalMove && !piece && (
           <div
             style={{
-              width: Math.max(12, sqSize * 0.33), height: Math.max(12, sqSize * 0.33),
-              borderRadius: "50%", backgroundColor: "#000", opacity: 0.3,
+              width: Math.max(12, sqSize * 0.33),
+              height: Math.max(12, sqSize * 0.33),
+              borderRadius: "50%",
+              backgroundColor: "#000",
+              opacity: 0.3,
             }}
           />
         )}
@@ -91,13 +115,20 @@ ChessSquare.displayName = "ChessSquare";
 interface BoardProps {
   fen?: string;
   orientation?: "white" | "black";
-  onMove?: (from: string, to: string) => boolean;
+  onMove?: (from: string, to: string, promotion?: string) => boolean;
   disabled?: boolean;
   squareSize?: number;
   lastMove?: { from: string; to: string };
 }
 
-export function ChessBoard({ fen, orientation = "white", onMove, disabled = false, squareSize = 60, lastMove }: BoardProps) {
+export function ChessBoard({
+  fen,
+  orientation = "white",
+  onMove,
+  disabled = false,
+  squareSize = 60,
+  lastMove,
+}: BoardProps) {
   const [selected, setSelected] = useState<string | null>(null);
   const [legalMoves, setLegalMoves] = useState<string[]>([]);
 
@@ -118,7 +149,11 @@ export function ChessBoard({ fen, orientation = "white", onMove, disabled = fals
   }, [fen]);
 
   const game = useMemo(() => {
-    try { return new Chess(fen); } catch { return new Chess(); }
+    try {
+      return new Chess(fen);
+    } catch {
+      return new Chess();
+    }
   }, [fen]);
 
   const pieceMap = useMemo(() => {
@@ -142,7 +177,10 @@ export function ChessBoard({ fen, orientation = "white", onMove, disabled = fals
       const move = onMoveRef.current;
 
       if (sel && legals.includes(sq)) {
-        const success = move ? move(sel, sq) : true;
+        const selectedPiece = pieceMap.get(sel);
+        const promotion =
+          selectedPiece?.type === "p" && (sq.endsWith("8") || sq.endsWith("1")) ? "q" : undefined;
+        const success = move ? move(sel, sq, promotion) : true;
         if (success !== false) {
           setSelected(null);
           setLegalMoves([]);
@@ -212,7 +250,9 @@ export function ChessBoard({ fen, orientation = "white", onMove, disabled = fals
   const boardPx = squareSize * 8;
 
   return (
-    <div style={{ touchAction: "none", userSelect: "none", display: "flex", justifyContent: "center" }}>
+    <div
+      style={{ touchAction: "none", userSelect: "none", display: "flex", justifyContent: "center" }}
+    >
       <div
         style={{
           display: "grid",

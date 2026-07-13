@@ -26,16 +26,22 @@ export default function Lobby({ onEnterRoom }: { onEnterRoom: () => void }) {
       if (detail) setAvatarConfig(detail);
     };
     window.addEventListener("avatar-config-updated", handleAvatarUpdate as EventListener);
-    return () => window.removeEventListener("avatar-config-updated", handleAvatarUpdate as EventListener);
+    return () =>
+      window.removeEventListener("avatar-config-updated", handleAvatarUpdate as EventListener);
   }, []);
 
   // Auto-fill player name from Supabase profile
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => {
       if (data.user) {
-        supabase.from("profiles").select("username").eq("id", data.user.id).single().then(({ data: profile }) => {
-          if (profile?.username) setPlayerName(profile.username);
-        });
+        supabase
+          .from("profiles")
+          .select("username")
+          .eq("id", data.user.id)
+          .single()
+          .then(({ data: profile }) => {
+            if (profile?.username) setPlayerName(profile.username);
+          });
       }
     });
   }, []);
@@ -52,10 +58,10 @@ export default function Lobby({ onEnterRoom }: { onEnterRoom: () => void }) {
 
     setIsCreating(true);
     try {
-      const newRoomId = await createRoom(roomName, true, "classic");
+      const room = await createRoom(roomName, true, "classic");
 
       // Join the room as first player (await ensures roomId is set in state before navigating)
-      await joinRoom(newRoomId, playerName);
+      await joinRoom(room.roomId, playerName, avatarConfig, room.gamePin);
       onEnterRoom();
       toast.success("Room created!");
     } catch (error) {
@@ -89,7 +95,7 @@ export default function Lobby({ onEnterRoom }: { onEnterRoom: () => void }) {
       }
 
       const result = data as any;
-      await joinRoom(result.roomId, playerName);
+      await joinRoom(result.roomId, playerName, avatarConfig, pin);
       onEnterRoom();
       toast.success("Joined room!");
     } catch (error) {
@@ -140,11 +146,7 @@ export default function Lobby({ onEnterRoom }: { onEnterRoom: () => void }) {
                       maxLength={30}
                     />
                   </div>
-                  <Button
-                    onClick={handleCreateRoom}
-                    disabled={isCreating}
-                    className="w-full"
-                  >
+                  <Button onClick={handleCreateRoom} disabled={isCreating} className="w-full">
                     {isCreating ? "Creating..." : "Create Room"}
                   </Button>
                 </CardContent>

@@ -68,6 +68,7 @@ function PingPongGame() {
   const [screen, setScreen] = useState<"menu" | "playing" | "over">("menu");
   const [mode, setMode] = useState<"two-player" | "ai">("two-player");
   const [winner, setWinner] = useState<"player" | "opponent" | null>(null);
+  const [scoreSubmitted, setScoreSubmitted] = useState(false);
 
   // Mutable game state (never triggers re-render mid-loop)
   // p1 = left paddle, p2 = right paddle
@@ -109,6 +110,7 @@ function PingPongGame() {
     };
     setDisplayScore({ p1: 0, p2: 0 });
     setWinner(null);
+    setScoreSubmitted(false);
     setScreen("playing");
     resetBall();
   }, [resetBall]);
@@ -179,8 +181,8 @@ function PingPongGame() {
         }
 
         // Player (right paddle) — keyboard
-        if (s.keys.w) s.p2Y = Math.max(0, s.p2Y - PADDLE_SPEED);
-        if (s.keys.s) s.p2Y = Math.min(H - PADDLE_H, s.p2Y + PADDLE_SPEED);
+        if (s.keys.w || s.keys.ArrowUp) s.p2Y = Math.max(0, s.p2Y - PADDLE_SPEED);
+        if (s.keys.s || s.keys.ArrowDown) s.p2Y = Math.min(H - PADDLE_H, s.p2Y + PADDLE_SPEED);
 
         // Player — touch
         if (s.touchY !== null) {
@@ -339,6 +341,7 @@ function PingPongGame() {
       });
     },
     onSuccess: () => {
+      setScoreSubmitted(true);
       toast.success("Score submitted!");
       queryClient.invalidateQueries({ queryKey: ["game-leaderboard", game.id] });
       queryClient.invalidateQueries({ queryKey: ["global-leaderboard"] });
@@ -417,7 +420,9 @@ function PingPongGame() {
               <>
                 <p>
                   <kbd className="px-1.5 py-0.5 rounded bg-secondary text-xs font-mono">W</kbd>{" "}
-                  <kbd className="px-1.5 py-0.5 rounded bg-secondary text-xs font-mono">S</kbd> or
+                  <kbd className="px-1.5 py-0.5 rounded bg-secondary text-xs font-mono">S</kbd> or{" "}
+                  <kbd className="px-1.5 py-0.5 rounded bg-secondary text-xs font-mono">↑</kbd>{" "}
+                  <kbd className="px-1.5 py-0.5 rounded bg-secondary text-xs font-mono">↓</kbd> or
                   touch — You (right)
                 </p>
                 <p className="text-muted-foreground">AI controls left paddle</p>
@@ -509,12 +514,14 @@ function PingPongGame() {
                   <Button
                     variant="outline"
                     onClick={() => scoreMutation.mutate()}
-                    disabled={scoreMutation.isPending}
+                    disabled={scoreMutation.isPending || scoreSubmitted}
                   >
                     <Trophy className="w-4 h-4 mr-1" />
-                    {scoreMutation.isPending
-                      ? "Submitting..."
-                      : `Submit Score (${gs.current.hits} hits)`}
+                    {scoreSubmitted
+                      ? "Score Submitted"
+                      : scoreMutation.isPending
+                        ? "Submitting..."
+                        : `Submit Score (${gs.current.hits} hits)`}
                   </Button>
                 )}
                 <Button variant="ghost" size="sm" onClick={() => setScreen("menu")}>

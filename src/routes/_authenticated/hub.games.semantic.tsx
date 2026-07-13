@@ -49,6 +49,7 @@ interface GameState {
   isComplete: boolean;
   gaveUp: boolean;
   hintsUsed: number;
+  scoreSubmitted: boolean;
 }
 
 // ── Similarity display ────────────────────────────────────────
@@ -92,7 +93,7 @@ function loadState(target: string): GameState | null {
     if (!raw) return null;
     const s = JSON.parse(raw) as GameState;
     if (s.targetWord !== target) return null;
-    return s;
+    return { ...s, scoreSubmitted: s.scoreSubmitted ?? false };
   } catch {
     return null;
   }
@@ -147,13 +148,21 @@ function SemanticGame() {
         isComplete: false,
         gaveUp: false,
         hintsUsed: 0,
+        scoreSubmitted: false,
       },
   );
 
   // Re-init state if the day changed since last visit
   useEffect(() => {
     if (gs.targetWord !== dailyWord) {
-      setGs({ targetWord: dailyWord, guesses: [], isComplete: false, gaveUp: false, hintsUsed: 0 });
+      setGs({
+        targetWord: dailyWord,
+        guesses: [],
+        isComplete: false,
+        gaveUp: false,
+        hintsUsed: 0,
+        scoreSubmitted: false,
+      });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dailyWord]);
@@ -217,7 +226,7 @@ function SemanticGame() {
 
   const scoreMutation = useMutation({
     mutationFn: async () => {
-      if (!game || gs.gaveUp) return;
+      if (!game || gs.gaveUp || gs.scoreSubmitted) return;
       const s = Math.max(1, 101 - gs.guesses.length);
       await submitScoreFn({
         data: {
@@ -228,6 +237,7 @@ function SemanticGame() {
       });
     },
     onSuccess: () => {
+      setGs((p) => ({ ...p, scoreSubmitted: true }));
       toast.success("Score submitted!");
       queryClient.invalidateQueries({ queryKey: ["game-leaderboard", game.id] });
       queryClient.invalidateQueries({ queryKey: ["global-leaderboard"] });
@@ -405,10 +415,14 @@ function SemanticGame() {
                 variant="outline"
                 className="w-full"
                 onClick={() => scoreMutation.mutate()}
-                disabled={scoreMutation.isPending}
+                disabled={scoreMutation.isPending || gs.scoreSubmitted}
               >
                 <Trophy className="mr-2 h-4 w-4" />
-                {scoreMutation.isPending ? "Submitting..." : "Submit Score"}
+                {scoreMutation.isPending
+                  ? "Submitting..."
+                  : gs.scoreSubmitted
+                    ? "Score Submitted"
+                    : "Submit Score"}
               </Button>
             )}
             <p className="text-center text-sm text-muted-foreground">

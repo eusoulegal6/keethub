@@ -1,4 +1,12 @@
-import { createContext, useContext, useEffect, useState, useCallback, useRef, ReactNode } from "react";
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useState,
+  useCallback,
+  useRef,
+  ReactNode,
+} from "react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useRealtime, type RoomChannel } from "@/games/paint-and-guess/hooks/useRealtime";
@@ -29,6 +37,7 @@ interface RoundState {
 
 interface GameState {
   roomId: string | null;
+  gamePin: string | null;
   playerName: string;
   ownerId: string | null;
   selfId: string | null;
@@ -51,8 +60,17 @@ interface GameContextType {
   roundWinner: Player | null;
   channel: RoomChannel | null;
   isConnected: boolean;
-  joinRoom: (roomId: string, playerName: string, avatar?: string | AvatarConfig) => Promise<void>;
-  createRoom: (roomName: string, isPublic?: boolean, wordPack?: string) => Promise<string>;
+  joinRoom: (
+    roomId: string,
+    playerName: string,
+    avatar?: string | AvatarConfig,
+    knownGamePin?: string | null,
+  ) => Promise<void>;
+  createRoom: (
+    roomName: string,
+    isPublic?: boolean,
+    wordPack?: string,
+  ) => Promise<{ roomId: string; gamePin: string | null }>;
   leaveRoom: () => void;
   startGame: () => void;
   setReadyState: (isReady: boolean) => void;
@@ -76,15 +94,43 @@ interface ChatMessage {
 
 function createInitialRoundState(): RoundState {
   return {
-    number: 0, drawer: null, word: null, revealedWord: null,
-    timeLeft: 60, roundTime: 60, winner: null, deadlineAt: null,
+    number: 0,
+    drawer: null,
+    word: null,
+    revealedWord: null,
+    timeLeft: 60,
+    roundTime: 60,
+    winner: null,
+    deadlineAt: null,
   };
 }
 
 function createInitialGameState(): GameState {
   return {
-    roomId: null, playerName: "", ownerId: null, selfId: null,
-    players: [], phase: "lobby", round: createInitialRoundState(), maxRounds: 6,
+    roomId: null,
+    gamePin: null,
+    playerName: "",
+    ownerId: null,
+    selfId: null,
+    players: [],
+    phase: "lobby",
+    round: createInitialRoundState(),
+    maxRounds: 6,
+  };
+}
+
+function createChatMessage(
+  player: { id: string; name: string },
+  message: string,
+  type: ChatMessage["type"],
+  timestamp = Date.now(),
+): ChatMessage {
+  return {
+    id: `${timestamp}-${Math.random().toString(36).slice(2)}`,
+    player,
+    message,
+    timestamp,
+    type,
   };
 }
 
@@ -146,146 +192,158 @@ export function GameProvider({ children }: { children: ReactNode }) {
   }, []);
 
   // ── Room event subscriber ───────────────────────────────────
-  const subscribeToRoom = useCallback((roomId: string) => {
-    if (channelRef.current) {
-      channelRef.current.unsubscribe();
-    }
-    const roomChannel = joinRoomChannel(roomId);
-    channelRef.current = roomChannel;
-
-    roomChannel.subscribe("player-joined", () => {
-      fetchRoomPlayers(roomId);
-    });
-
-    roomChannel.subscribe("player-left", () => {
-      fetchRoomPlayers(roomId);
-    });
-
-    roomChannel.subscribe("player-ready", () => {
-      fetchRoomPlayers(roomId);
-    });
-
-    roomChannel.subscribe("game-started", (payload: any) => {
-      setGameState((prev) => ({
-        ...prev,
-        phase: "drawing",
-        round: {
-          number: payload.roundNumber || 1,
-          drawer: payload.drawer || null,
-          word: payload.word || null,
-          timeLeft: payload.roundTime ?? prev.round.roundTime,
-          roundTime: payload.roundTime ?? prev.round.roundTime,
-          deadlineAt: payload.deadlineAt ?? null,
-          revealedWord: null,
-          winner: null,
-        },
-      }));
-      toast.info("Game started!");
-    });
-
-    roomChannel.subscribe("round-started", (payload: any) => {
-      advanceCalledRef.current = false;
-      setChatMessages([]);
-      setGameState((prev) => ({
-        ...prev,
-        phase: "drawing",
-        round: {
-          number: payload.roundNumber,
-          drawer: payload.drawer || null,
-          word: payload.word || null,
-          revealedWord: null,
-          timeLeft: payload.roundTime,
-          roundTime: payload.roundTime,
-          winner: null,
-          deadlineAt: payload.deadlineAt ?? null,
-        },
-      }));
-      fetchRoomPlayers(roomId);
-      window.dispatchEvent(new CustomEvent("round-started"));
-    });
-
-    roomChannel.subscribe("round-ended", (payload: any) => {
-      advanceCalledRef.current = false;
-      setGameState((prev) => ({
-        ...prev,
-        phase: "round-ended",
-        players: payload.players ?? prev.players,
-        round: {
-          ...prev.round,
-          number: payload.roundNumber ?? prev.round.number,
-          word: null,
-          revealedWord: payload.word ?? prev.round.revealedWord,
-        },
-      }));
-      window.dispatchEvent(new CustomEvent("round-ended"));
-    });
-
-    roomChannel.subscribe("game-ended", (payload: any) => {
-      advanceCalledRef.current = false;
-      setGameState((prev) => ({
-        ...prev,
-        phase: "game-ended",
-        players: payload.players ?? prev.players,
-      }));
-      toast.info("Game over!");
-    });
-
-    roomChannel.subscribe("correct-guess", (payload: any) => {
-      setChatMessages((prev) => [
-        ...prev,
-        {
-          id: Date.now().toString(),
-          player: payload.player,
-          message: `Correctly guessed! +${payload.points} points`,
-          timestamp: Date.now(),
-          type: "correct-guess",
-        },
-      ]);
-      if (payload.player.name !== gameState.playerName) {
-        toast.success(`${payload.player.name} guessed correctly!`);
+  const subscribeToRoom = useCallback(
+    (roomId: string) => {
+      if (channelRef.current) {
+        channelRef.current.unsubscribe();
       }
-      fetchRoomPlayers(roomId);
-    });
+      const roomChannel = joinRoomChannel(roomId);
+      channelRef.current = roomChannel;
 
-    roomChannel.subscribe("wrong-guess", (payload: any) => {
-      setChatMessages((prev) => [
-        ...prev,
-        {
-          id: Date.now().toString(),
-          player: payload.player,
-          message: payload.guess,
-          timestamp: Date.now(),
-          type: "wrong-guess",
-        },
-      ]);
-    });
+      roomChannel.subscribe("player-joined", () => {
+        fetchRoomPlayers(roomId);
+      });
 
-    roomChannel.subscribe("chat-message", (payload: any) => {
-      setChatMessages((prev) => [
-        ...prev,
-        {
-          id: payload.timestamp?.toString() || Date.now().toString(),
-          player: payload.player,
-          message: payload.message,
-          timestamp: payload.timestamp || Date.now(),
-          type: "message",
-        },
-      ]);
-    });
+      roomChannel.subscribe("player-left", () => {
+        fetchRoomPlayers(roomId);
+      });
 
-    roomChannel.subscribe("drawing:path-start", () => {});
-    roomChannel.subscribe("drawing:path-update", (payload: any) => {
-      window.dispatchEvent(new CustomEvent("drawing-event", { detail: payload }));
-    });
-    roomChannel.subscribe("drawing:path-complete", (payload: any) => {
-      window.dispatchEvent(new CustomEvent("drawing-event", { detail: payload }));
-    });
-    roomChannel.subscribe("canvas-cleared", () => {
-      window.dispatchEvent(new CustomEvent("canvas-cleared"));
-    });
+      roomChannel.subscribe("player-ready", () => {
+        fetchRoomPlayers(roomId);
+      });
 
-    return roomChannel;
-  }, [joinRoomChannel, gameState.playerName, fetchRoomPlayers]);
+      roomChannel.subscribe("player-avatar", (payload: any) => {
+        setGameState((prev) => ({
+          ...prev,
+          players: prev.players.map((player) =>
+            player.id === payload.playerId ? { ...player, avatar: payload.avatar } : player,
+          ),
+        }));
+      });
+
+      roomChannel.subscribe("game-started", (payload: any) => {
+        setGameState((prev) => ({
+          ...prev,
+          phase: "drawing",
+          round: {
+            number: payload.roundNumber || 1,
+            drawer: payload.drawer || null,
+            word: payload.word || null,
+            timeLeft: payload.roundTime ?? prev.round.roundTime,
+            roundTime: payload.roundTime ?? prev.round.roundTime,
+            deadlineAt: payload.deadlineAt ?? null,
+            revealedWord: null,
+            winner: null,
+          },
+        }));
+        toast.info("Game started!");
+      });
+
+      roomChannel.subscribe("round-started", (payload: any) => {
+        advanceCalledRef.current = false;
+        setChatMessages([]);
+        setGameState((prev) => ({
+          ...prev,
+          phase: "drawing",
+          round: {
+            number: payload.roundNumber,
+            drawer: payload.drawer || null,
+            word: payload.word || null,
+            revealedWord: null,
+            timeLeft: payload.roundTime,
+            roundTime: payload.roundTime,
+            winner: null,
+            deadlineAt: payload.deadlineAt ?? null,
+          },
+        }));
+        fetchRoomPlayers(roomId);
+        window.dispatchEvent(new CustomEvent("round-started"));
+      });
+
+      roomChannel.subscribe("round-ended", (payload: any) => {
+        advanceCalledRef.current = false;
+        setGameState((prev) => ({
+          ...prev,
+          phase: "round-ended",
+          players: payload.players ?? prev.players,
+          round: {
+            ...prev.round,
+            number: payload.roundNumber ?? prev.round.number,
+            word: null,
+            revealedWord: payload.word ?? prev.round.revealedWord,
+          },
+        }));
+        window.dispatchEvent(new CustomEvent("round-ended"));
+      });
+
+      roomChannel.subscribe("game-ended", (payload: any) => {
+        advanceCalledRef.current = false;
+        setGameState((prev) => ({
+          ...prev,
+          phase: "game-ended",
+          players: payload.players ?? prev.players,
+        }));
+        toast.info("Game over!");
+      });
+
+      roomChannel.subscribe("correct-guess", (payload: any) => {
+        setChatMessages((prev) => [
+          ...prev,
+          {
+            id: Date.now().toString(),
+            player: payload.player,
+            message: `Correctly guessed! +${payload.points} points`,
+            timestamp: Date.now(),
+            type: "correct-guess",
+          },
+        ]);
+        if (payload.player.name !== gameState.playerName) {
+          toast.success(`${payload.player.name} guessed correctly!`);
+        }
+        fetchRoomPlayers(roomId);
+      });
+
+      roomChannel.subscribe("wrong-guess", (payload: any) => {
+        setChatMessages((prev) => [
+          ...prev,
+          {
+            id: Date.now().toString(),
+            player: payload.player,
+            message: payload.guess,
+            timestamp: Date.now(),
+            type: "wrong-guess",
+          },
+        ]);
+      });
+
+      roomChannel.subscribe("chat-message", (payload: any) => {
+        setChatMessages((prev) => [
+          ...prev,
+          {
+            id: payload.timestamp?.toString() || Date.now().toString(),
+            player: payload.player,
+            message: payload.message,
+            timestamp: payload.timestamp || Date.now(),
+            type: "message",
+          },
+        ]);
+      });
+
+      roomChannel.subscribe("drawing:path-start", () => {});
+      roomChannel.subscribe("drawing:path-update", (payload: any) => {
+        window.dispatchEvent(new CustomEvent("drawing-event", { detail: payload }));
+      });
+      roomChannel.subscribe("drawing:path-complete", (payload: any) => {
+        window.dispatchEvent(new CustomEvent("drawing-event", { detail: payload }));
+      });
+      roomChannel.subscribe("canvas-cleared", () => {
+        window.dispatchEvent(new CustomEvent("canvas-cleared"));
+      });
+
+      return roomChannel;
+    },
+    [joinRoomChannel, gameState.playerName, fetchRoomPlayers],
+  );
 
   // ── advanceRound (shared by timer and sendGuess) ─────────────
   const advanceRound = useCallback(async (roomId: string) => {
@@ -295,7 +353,10 @@ export function GameProvider({ children }: { children: ReactNode }) {
     const { data } = await supabase.rpc("advance_paint_round", { room_id: roomId });
     const result = data as any;
 
-    if (!result?.success || !channelRef.current) return;
+    if (!result?.success || !channelRef.current) {
+      advanceCalledRef.current = false;
+      return;
+    }
 
     if (result.gameEnded) {
       channelRef.current.broadcast("game-ended", { players: result.scores });
@@ -379,97 +440,108 @@ export function GameProvider({ children }: { children: ReactNode }) {
 
   // ── Game actions ─────────────────────────────────────────────
 
-  const joinRoom = useCallback(async (
-    roomId: string,
-    playerName: string,
-  ) => {
-    subscribeToRoom(roomId);
+  const joinRoom = useCallback(
+    async (
+      roomId: string,
+      playerName: string,
+      _avatar?: string | AvatarConfig,
+      knownGamePin?: string | null,
+    ) => {
+      subscribeToRoom(roomId);
 
-    // Set roomId synchronously so entry.tsx can transition the view
-    setGameState((prev) => ({
-      ...prev,
-      roomId,
-      playerName,
-    }));
+      // Set roomId synchronously so entry.tsx can transition the view
+      setGameState((prev) => ({
+        ...prev,
+        roomId,
+        gamePin: knownGamePin ?? prev.gamePin,
+        playerName,
+      }));
 
-    // Fetch authoritative room state
-    const { data } = await supabase.rpc("get_paint_room_state", { room_id: roomId });
-    const state = data as any;
+      // Fetch authoritative room state
+      const { data } = await supabase.rpc("get_paint_room_state", { room_id: roomId });
+      const state = data as any;
 
-    if (!state?.success || !state.room) return;
+      if (!state?.success || !state.room) return;
 
-    // Find selfId: first try userId field from DB, fall back to matching by name
-    let selfId: string | null = null;
-    const { data: authData } = await supabase.auth.getUser();
-    const authUserId = authData.user?.id;
+      // Find selfId: first try userId field from DB, fall back to matching by name
+      let selfId: string | null = null;
+      const { data: authData } = await supabase.auth.getUser();
+      const authUserId = authData.user?.id;
 
-    const players = (state.players || []).map((p: any) => {
-      if (authUserId && p.userId === authUserId) selfId = p.id;
+      const players = (state.players || []).map((p: any) => {
+        if (authUserId && p.userId === authUserId) selfId = p.id;
+        return {
+          id: p.id,
+          name: p.name,
+          score: p.score,
+          isReady: p.isReady ?? false,
+          avatar: p.avatar,
+        };
+      });
+
+      // Fallback: match by playerName if userId didn't match
+      if (!selfId) {
+        const byName = players.find((p: any) => p.name.toLowerCase() === playerName.toLowerCase());
+        if (byName) selfId = byName.id;
+      }
+
+      // Use server deadline if available, otherwise compute from roundTime
+      const serverDeadline = state.room.deadlineAt;
+      const computedDeadline = serverDeadline
+        ? serverDeadline // server already returns epoch ms
+        : state.room.isGameActive
+          ? Date.now() + state.room.roundTime * 1000
+          : null;
+
+      setGameState((prev) => ({
+        ...prev,
+        roomId,
+        gamePin: state.room.gamePin ?? knownGamePin ?? prev.gamePin,
+        playerName,
+        selfId,
+        ownerId: state.room.ownerId,
+        players,
+        phase: state.room.isGameActive ? "drawing" : "lobby",
+        maxRounds: state.room.maxRounds,
+        round: {
+          ...prev.round,
+          number: state.room.roundNumber,
+          timeLeft: state.room.roundTime,
+          roundTime: state.room.roundTime,
+          deadlineAt: computedDeadline,
+        },
+      }));
+
+      // Broadcast arrival to other players
+      channelRef.current?.broadcast("player-joined", {
+        playerName,
+        playerId: selfId,
+      });
+    },
+    [subscribeToRoom],
+  );
+
+  const createRoom = useCallback(
+    async (
+      roomName: string,
+      _isPublic?: boolean,
+      wordPack?: string,
+    ): Promise<{ roomId: string; gamePin: string | null }> => {
+      const { data, error } = await supabase.rpc("create_paint_room", {
+        room_name: roomName,
+        word_pack: wordPack || "classic",
+      });
+
+      if (error) throw error;
+      const result = data as any;
+      if (!result?.success) throw new Error("Failed to create room");
       return {
-        id: p.id,
-        name: p.name,
-        score: p.score,
-        isReady: p.isReady ?? false,
-        avatar: p.avatar,
+        roomId: result.roomId,
+        gamePin: result.gamePin ?? null,
       };
-    });
-
-    // Fallback: match by playerName if userId didn't match
-    if (!selfId) {
-      const byName = players.find(
-        (p: any) => p.name.toLowerCase() === playerName.toLowerCase(),
-      );
-      if (byName) selfId = byName.id;
-    }
-
-    // Use server deadline if available, otherwise compute from roundTime
-    const serverDeadline = state.room.deadlineAt;
-    const computedDeadline = serverDeadline
-      ? serverDeadline  // server already returns epoch ms
-      : state.room.isGameActive
-        ? Date.now() + state.room.roundTime * 1000
-        : null;
-
-    setGameState((prev) => ({
-      ...prev,
-      roomId,
-      playerName,
-      selfId,
-      ownerId: state.room.ownerId,
-      players,
-      phase: state.room.isGameActive ? "drawing" : "lobby",
-      maxRounds: state.room.maxRounds,
-      round: {
-        ...prev.round,
-        number: state.room.roundNumber,
-        timeLeft: state.room.roundTime,
-        roundTime: state.room.roundTime,
-        deadlineAt: computedDeadline,
-      },
-    }));
-
-    // Broadcast arrival to other players
-    channelRef.current?.broadcast("player-joined", {
-      playerName,
-      playerId: selfId,
-    });
-  }, [subscribeToRoom]);
-
-  const createRoom = useCallback(async (
-    roomName: string,
-    _isPublic?: boolean,
-    wordPack?: string,
-  ): Promise<string> => {
-    const { data, error } = await supabase.rpc("create_paint_room", {
-      room_name: roomName,
-      word_pack: wordPack || "classic",
-    });
-
-    if (error) throw error;
-    const result = data as any;
-    if (!result?.success) throw new Error("Failed to create room");
-    return result.roomId;
-  }, []);
+    },
+    [],
+  );
 
   const leaveRoom = useCallback(() => {
     const roomId = gameState.roomId;
@@ -552,99 +624,141 @@ export function GameProvider({ children }: { children: ReactNode }) {
     toast.info(`Your word: ${result.word}`);
   }, [gameState.roomId]);
 
-  const setReadyState = useCallback(async (isReady: boolean) => {
-    if (!gameState.roomId || !channelRef.current) return;
+  const setReadyState = useCallback(
+    async (isReady: boolean) => {
+      if (!gameState.roomId || !channelRef.current) return;
 
-    await supabase.rpc("set_player_ready", {
-      room_id: gameState.roomId,
-      is_ready: isReady,
-    });
-
-    // Optimistic local update
-    setGameState((prev) => ({
-      ...prev,
-      players: prev.players.map((p) =>
-        p.id === prev.selfId ? { ...p, isReady } : p,
-      ),
-    }));
-
-    channelRef.current.broadcast("player-ready", { isReady });
-    // Also refresh from server to keep everyone in sync
-    fetchRoomPlayers(gameState.roomId);
-  }, [gameState.roomId, gameState.selfId, fetchRoomPlayers]);
-
-  const updateAvatar = useCallback((_avatar: string | AvatarConfig) => {
-    // Avatar is stored client-side in localStorage/profile table
-  }, []);
-
-  const sendGuess = useCallback(async (guess: string) => {
-    if (!gameState.roomId || !channelRef.current) return;
-
-    const { data } = await supabase.rpc("submit_paint_guess", {
-      room_id: gameState.roomId,
-      guess,
-    });
-
-    const result = data as any;
-    const player = gameState.players.find((p) => p.id === gameState.selfId)
-      || { id: gameState.selfId || "", name: gameState.playerName };
-
-    if (result?.correct) {
-      channelRef.current.broadcast("correct-guess", {
-        player, points: result.points,
-      });
-
-      // Check if all guessers finished
-      const { data: allDone } = await supabase.rpc("all_guessers_finished", {
+      await supabase.rpc("set_player_ready", {
         room_id: gameState.roomId,
+        is_ready: isReady,
       });
-      if (allDone) {
-        advanceRound(gameState.roomId);
+
+      // Optimistic local update
+      setGameState((prev) => ({
+        ...prev,
+        players: prev.players.map((p) => (p.id === prev.selfId ? { ...p, isReady } : p)),
+      }));
+
+      channelRef.current.broadcast("player-ready", { isReady });
+      // Also refresh from server to keep everyone in sync
+      fetchRoomPlayers(gameState.roomId);
+    },
+    [gameState.roomId, gameState.selfId, fetchRoomPlayers],
+  );
+
+  const updateAvatar = useCallback(
+    (avatar: string | AvatarConfig) => {
+      setGameState((prev) => ({
+        ...prev,
+        players: prev.players.map((player) =>
+          player.id === prev.selfId ? { ...player, avatar } : player,
+        ),
+      }));
+
+      if (gameState.selfId) {
+        channelRef.current?.broadcast("player-avatar", {
+          playerId: gameState.selfId,
+          avatar,
+        });
       }
-    } else if (!result?.already_guessed) {
-      channelRef.current.broadcast("wrong-guess", { player, guess });
-    }
-  }, [gameState.roomId, gameState.players, gameState.selfId, gameState.playerName, advanceRound]);
+    },
+    [gameState.selfId],
+  );
 
-  const sendChatMessage = useCallback((message: string) => {
-    if (!channelRef.current) return;
-    const player = gameState.players.find((p) => p.id === gameState.selfId)
-      || { id: gameState.selfId || "", name: gameState.playerName };
+  const sendGuess = useCallback(
+    async (guess: string) => {
+      if (!gameState.roomId || !channelRef.current) return;
 
-    channelRef.current.broadcast("chat-message", {
-      player, message, timestamp: Date.now(),
-    });
-  }, [gameState.players, gameState.selfId, gameState.playerName]);
+      const { data } = await supabase.rpc("submit_paint_guess", {
+        room_id: gameState.roomId,
+        guess,
+      });
 
-  const sendDrawingEvent = useCallback((event: any) => {
-    if (!channelRef.current) return;
-    const isDrawer = gameState.selfId !== null
-      && gameState.round.drawer?.id === gameState.selfId;
-    if (!isDrawer) return;
+      const result = data as any;
+      const player = gameState.players.find((p) => p.id === gameState.selfId) || {
+        id: gameState.selfId || "",
+        name: gameState.playerName,
+      };
 
-    if (event.type === "path-start") {
-      channelRef.current.broadcast("drawing:path-start", event);
-    } else if (event.type === "path-update") {
-      channelRef.current.broadcast("drawing:path-update", event);
-    } else if (event.type === "path-complete") {
-      channelRef.current.broadcast("drawing:path-complete", event);
-    } else if (event.type === "path") {
-      channelRef.current.broadcast("drawing:path-complete", event);
-    }
-  }, [gameState.selfId, gameState.round.drawer]);
+      if (result?.correct) {
+        setChatMessages((prev) => [
+          ...prev,
+          createChatMessage(player, `Correctly guessed! +${result.points} points`, "correct-guess"),
+        ]);
+        channelRef.current.broadcast("correct-guess", {
+          player,
+          points: result.points,
+        });
+        fetchRoomPlayers(gameState.roomId);
+
+        void advanceRound(gameState.roomId);
+      } else if (!result?.already_guessed) {
+        setChatMessages((prev) => [...prev, createChatMessage(player, guess, "wrong-guess")]);
+        channelRef.current.broadcast("wrong-guess", { player, guess });
+      }
+    },
+    [
+      gameState.roomId,
+      gameState.players,
+      gameState.selfId,
+      gameState.playerName,
+      advanceRound,
+      fetchRoomPlayers,
+    ],
+  );
+
+  const sendChatMessage = useCallback(
+    (message: string) => {
+      if (!channelRef.current) return;
+      const player = gameState.players.find((p) => p.id === gameState.selfId) || {
+        id: gameState.selfId || "",
+        name: gameState.playerName,
+      };
+      const timestamp = Date.now();
+
+      setChatMessages((prev) => [
+        ...prev,
+        createChatMessage(player, message, "message", timestamp),
+      ]);
+
+      channelRef.current.broadcast("chat-message", {
+        player,
+        message,
+        timestamp,
+      });
+    },
+    [gameState.players, gameState.selfId, gameState.playerName],
+  );
+
+  const sendDrawingEvent = useCallback(
+    (event: any) => {
+      if (!channelRef.current) return;
+      const isDrawer = gameState.selfId !== null && gameState.round.drawer?.id === gameState.selfId;
+      if (!isDrawer) return;
+
+      if (event.type === "path-start") {
+        channelRef.current.broadcast("drawing:path-start", event);
+      } else if (event.type === "path-update") {
+        channelRef.current.broadcast("drawing:path-update", event);
+      } else if (event.type === "path-complete") {
+        channelRef.current.broadcast("drawing:path-complete", event);
+      } else if (event.type === "path") {
+        channelRef.current.broadcast("drawing:path-complete", event);
+      }
+    },
+    [gameState.selfId, gameState.round.drawer],
+  );
 
   const clearCanvas = useCallback(() => {
     if (!channelRef.current) return;
-    const isDrawer = gameState.selfId !== null
-      && gameState.round.drawer?.id === gameState.selfId;
+    const isDrawer = gameState.selfId !== null && gameState.round.drawer?.id === gameState.selfId;
     if (!isDrawer) return;
     channelRef.current.broadcast("canvas-cleared", {});
   }, [gameState.selfId, gameState.round.drawer]);
 
   // ── Computed values ──────────────────────────────────────────
   const isGameActive = gameState.phase !== "lobby" && gameState.phase !== "game-ended";
-  const isDrawer = gameState.selfId !== null
-    && gameState.round.drawer?.id === gameState.selfId;
+  const isDrawer = gameState.selfId !== null && gameState.round.drawer?.id === gameState.selfId;
   const currentDrawer = gameState.round.drawer;
   const currentWord = isDrawer ? gameState.round.word : null;
   const roundNumber = gameState.round.number;
@@ -657,12 +771,28 @@ export function GameProvider({ children }: { children: ReactNode }) {
     <GameContext.Provider
       value={{
         gameState,
-        isGameActive, isDrawer, currentDrawer, currentWord,
-        roundNumber, timeLeft, roundTime, revealedWord, roundWinner,
-        channel: channelRef.current, isConnected,
-        joinRoom, createRoom, leaveRoom, startGame, setReadyState,
-        updateAvatar, sendGuess, sendChatMessage, sendDrawingEvent,
-        clearCanvas, chatMessages,
+        isGameActive,
+        isDrawer,
+        currentDrawer,
+        currentWord,
+        roundNumber,
+        timeLeft,
+        roundTime,
+        revealedWord,
+        roundWinner,
+        channel: channelRef.current,
+        isConnected,
+        joinRoom,
+        createRoom,
+        leaveRoom,
+        startGame,
+        setReadyState,
+        updateAvatar,
+        sendGuess,
+        sendChatMessage,
+        sendDrawingEvent,
+        clearCanvas,
+        chatMessages,
       }}
     >
       {children}

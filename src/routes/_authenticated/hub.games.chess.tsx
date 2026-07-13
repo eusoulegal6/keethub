@@ -130,6 +130,7 @@ function PlayTab({ gameId, accent }: { gameId: string; accent: string }) {
   const submitScoreFn = useServerFn(submitScore);
   const [mode, setMode] = useState<"local" | "ai">("local");
   const [orientation, setOrientation] = useState<"white" | "black">("white");
+  const [scoreSubmitted, setScoreSubmitted] = useState(false);
   const prevTurn = useRef(game.turn);
 
   // Auto-trigger AI move
@@ -173,6 +174,7 @@ function PlayTab({ gameId, accent }: { gameId: string; accent: string }) {
 
   const scoreMutation = useMutation({
     mutationFn: async () => {
+      if (scoreSubmitted) return;
       await submitScoreFn({
         data: {
           gameId,
@@ -182,6 +184,7 @@ function PlayTab({ gameId, accent }: { gameId: string; accent: string }) {
       });
     },
     onSuccess: () => {
+      setScoreSubmitted(true);
       toast.success("Score submitted!");
       queryClient.invalidateQueries({ queryKey: ["game-leaderboard", gameId] });
       queryClient.invalidateQueries({ queryKey: ["global-leaderboard"] });
@@ -194,6 +197,7 @@ function PlayTab({ gameId, accent }: { gameId: string; accent: string }) {
 
   const handleSetMode = (m: "local" | "ai") => {
     setMode(m);
+    setScoreSubmitted(false);
     if (m === "local") {
       setAIConfig({ enabled: false, color: "black", depth: 3 });
       setSelectedOpponent(null);
@@ -214,6 +218,7 @@ function PlayTab({ gameId, accent }: { gameId: string; accent: string }) {
       elo: selectedOpponent.elo,
       opponentId: selectedOpponent.id,
     });
+    setScoreSubmitted(false);
     resetGame();
   };
 
@@ -248,7 +253,15 @@ function PlayTab({ gameId, accent }: { gameId: string; accent: string }) {
                 <Bot className="w-4 h-4 mr-1" /> VS AI
               </Button>
               {mode === "local" && !isMobile && (
-                <Button size="sm" variant="ghost" className="ml-auto" onClick={resetGame}>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="ml-auto"
+                  onClick={() => {
+                    setScoreSubmitted(false);
+                    resetGame();
+                  }}
+                >
                   <RotateCcw className="w-4 h-4 mr-1" /> New Game
                 </Button>
               )}
@@ -361,11 +374,15 @@ function PlayTab({ gameId, accent }: { gameId: string; accent: string }) {
               <Button
                 size="sm"
                 onClick={() => scoreMutation.mutate()}
-                disabled={scoreMutation.isPending}
+                disabled={scoreMutation.isPending || scoreSubmitted}
                 className="glow-primary"
               >
                 <Trophy className="w-4 h-4 mr-1" />
-                {scoreMutation.isPending ? "Submitting..." : "Submit Win"}
+                {scoreMutation.isPending
+                  ? "Submitting..."
+                  : scoreSubmitted
+                    ? "Win Submitted"
+                    : "Submit Win"}
               </Button>
             )}
           </div>
