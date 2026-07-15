@@ -2,7 +2,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { defineConfig } from "@playwright/test";
 
-const DEFAULT_BASE_URL = "http://127.0.0.1:5173";
+const DEFAULT_BASE_URL = "https://keethub.lovable.app";
 
 function loadE2EEnv() {
   const envPath = resolve(process.cwd(), ".env.e2e");
@@ -34,14 +34,13 @@ function loadE2EEnv() {
 loadE2EEnv();
 
 const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? DEFAULT_BASE_URL;
-const isListingTests = process.argv.includes("--list");
 
 export default defineConfig({
   testDir: "./tests/e2e",
   fullyParallel: false,
   workers: 1,
   retries: 1,
-  timeout: 300_000,
+  timeout: 600_000,
   expect: {
     timeout: 20_000,
   },
@@ -59,13 +58,4 @@ export default defineConfig({
       },
     },
   ],
-  webServer:
-    process.env.PLAYWRIGHT_BASE_URL || isListingTests
-      ? undefined
-      : {
-          command: "npm run dev -- --host 127.0.0.1 --port 5173",
-          url: baseURL,
-          reuseExistingServer: !process.env.CI,
-          timeout: 120_000,
-        },
 });

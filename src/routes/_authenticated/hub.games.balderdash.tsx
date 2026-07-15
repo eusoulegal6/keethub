@@ -143,10 +143,13 @@ function BalderdashRoute() {
       });
       setState(roomState as RoomState);
     } catch (error) {
-      localStorage.removeItem(ROOM_STORAGE_KEY);
-      setRoomId(null);
-      setState(null);
-      if (error instanceof Error) toast.error(error.message);
+      const message = error instanceof Error ? error.message : String(error);
+      if (/room not found|not in this room|unauthorized/i.test(message)) {
+        localStorage.removeItem(ROOM_STORAGE_KEY);
+        setRoomId(null);
+        setState(null);
+      }
+      toast.error(message);
     } finally {
       setLoading(false);
     }
