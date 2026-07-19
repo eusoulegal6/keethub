@@ -680,7 +680,9 @@ export function encodeAvatarConfig(config: AvatarConfig): string {
  */
 export function decodeAvatarConfig(encoded: string): AvatarConfig | null {
   try {
-    return JSON.parse(encoded) as AvatarConfig;
+    const parsed = JSON.parse(encoded);
+    if (!parsed || typeof parsed !== "object" || !parsed.name) return null;
+    return migrateAvatarConfig(parsed, 0);
   } catch (error) {
     console.error('Failed to decode avatar config:', error);
     return null;

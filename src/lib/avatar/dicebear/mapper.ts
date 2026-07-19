@@ -1,5 +1,5 @@
 import type { Options } from "@dicebear/avataaars";
-import { AvatarConfig, generateAvatarId } from "@/lib/avatar/config";
+import { AvatarConfig, generateAvatarId, DEFAULT_AVATAR_CONFIG } from "@/lib/avatar/config";
 import {
   SKIN_TONE_COLORS,
   HAIR_COLOR_VALUES,
@@ -209,9 +209,13 @@ export function avatarConfigToDiceBearOptions(
   config: AvatarConfig,
 ): DiceBearMappingResult {
   const seed = config.id || generateAvatarId(config);
-  const useHat = Boolean(config.accessories.hat);
-  const glassesStyle = mapGlasses(config.accessories.glasses);
-  const facialHairStyle = mapFacialHair(config.face.facialHair);
+  const accessories = config.accessories ?? DEFAULT_AVATAR_CONFIG.accessories;
+  const face = config.face ?? DEFAULT_AVATAR_CONFIG.face;
+  const hair = config.hair ?? DEFAULT_AVATAR_CONFIG.hair;
+  const clothes = config.clothes ?? DEFAULT_AVATAR_CONFIG.clothes;
+  const useHat = Boolean(accessories.hat);
+  const glassesStyle = mapGlasses(accessories.glasses);
+  const facialHairStyle = mapFacialHair(face.facialHair);
 
   const dicebearOptions = config.dicebear || {
     clothingGraphic: null,
@@ -225,23 +229,23 @@ export function avatarConfigToDiceBearOptions(
 
   const options: Options = {
     style: [backgroundStyle] as Options["style"],
-    top: [mapTopStyle(config, useHat) as NonNullable<Options["top"]>[number]],
-    clothing: [mapClothing(config) as NonNullable<Options["clothing"]>[number]],
+    top: [mapTopStyle(useHat, accessories, hair) as NonNullable<Options["top"]>[number]],
+    clothing: [mapClothing(clothes) as NonNullable<Options["clothing"]>[number]],
     clothingGraphic: clothingGraphic ? [clothingGraphic as NonNullable<Options["clothingGraphic"]>[number]] : undefined,
-    hairColor: [mapHairColor(config.hair.color)],
+    hairColor: [mapHairColor(hair.color)],
     skinColor: [mapSkinTone(config.skinTone)],
-    clothesColor: [mapClothingColor(config.clothes.color)],
+    clothesColor: [mapClothingColor(clothes.color)],
     backgroundColor: backgroundColor ? [backgroundColor] : undefined,
-    eyes: [mapEyes(config.face.eyes) as NonNullable<Options["eyes"]>[number]],
-    eyebrows: [mapEyebrows(config.face.eyebrows) as NonNullable<Options["eyebrows"]>[number]],
-    mouth: [mapMouth(config.face.mouth) as NonNullable<Options["mouth"]>[number]],
-    hatColor: useHat ? [mapHatColor(config)] : undefined,
+    eyes: [mapEyes(face.eyes) as NonNullable<Options["eyes"]>[number]],
+    eyebrows: [mapEyebrows(face.eyebrows) as NonNullable<Options["eyebrows"]>[number]],
+    mouth: [mapMouth(face.mouth) as NonNullable<Options["mouth"]>[number]],
+    hatColor: useHat ? [mapHatColor(clothes.color, hair.color)] : undefined,
     topProbability: 100,
     accessories: glassesStyle ? [glassesStyle as NonNullable<Options["accessories"]>[number]] : undefined,
     accessoriesProbability: glassesStyle ? 100 : 0,
     facialHair: facialHairStyle ? [facialHairStyle as NonNullable<Options["facialHair"]>[number]] : undefined,
     facialHairProbability: facialHairStyle ? 100 : 0,
-    facialHairColor: facialHairStyle ? [mapHairColor(config.hair.color)] : undefined,
+    facialHairColor: facialHairStyle ? [mapHairColor(hair.color)] : undefined,
   };
 
   return { seed, options };
@@ -263,27 +267,31 @@ function mapClothingColor(value: string): string {
   return normalizeHexColor(value, DEFAULT_CLOTHING_COLOR);
 }
 
-function mapHatColor(config: AvatarConfig): string {
-  if (config.clothes.color) return mapClothingColor(config.clothes.color);
-  return mapHairColor(config.hair.color);
+function mapHatColor(clothesColor: string, hairColor: string): string {
+  if (clothesColor) return mapClothingColor(clothesColor);
+  return mapHairColor(hairColor);
 }
 
-function mapTopStyle(config: AvatarConfig, useHat: boolean): string {
-  if (useHat && config.accessories.hat) {
+function mapTopStyle(
+  useHat: boolean,
+  accessories: AvatarConfig["accessories"],
+  hair: AvatarConfig["hair"],
+): string {
+  if (useHat && accessories.hat) {
     return (
-      HAT_STYLE_MAP[config.accessories.hat] ??
-      HAIR_STYLE_MAP[config.hair.style] ??
+      HAT_STYLE_MAP[accessories.hat] ??
+      HAIR_STYLE_MAP[hair.style] ??
       DEFAULT_TOP_STYLE
     );
   }
-  return HAIR_STYLE_MAP[config.hair.style] ?? DEFAULT_TOP_STYLE;
+  return HAIR_STYLE_MAP[hair.style] ?? DEFAULT_TOP_STYLE;
 }
 
-function mapClothing(config: AvatarConfig): string {
-  if (config.clothes.outfit) {
-    return OUTFIT_MAP[config.clothes.outfit] ?? CLOTHING_MAP[config.clothes.top ?? ""] ?? "shirtCrewNeck";
+function mapClothing(clothes: AvatarConfig["clothes"]): string {
+  if (clothes.outfit) {
+    return OUTFIT_MAP[clothes.outfit] ?? CLOTHING_MAP[clothes.top ?? ""] ?? "shirtCrewNeck";
   }
-  if (config.clothes.top && CLOTHING_MAP[config.clothes.top]) return CLOTHING_MAP[config.clothes.top];
+  if (clothes.top && CLOTHING_MAP[clothes.top]) return CLOTHING_MAP[clothes.top];
   return "shirtCrewNeck";
 }
 

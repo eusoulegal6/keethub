@@ -46,8 +46,6 @@ type GameDisplay = {
 };
 
 const gameArtworkBySlug: Record<string, string> = {
-  semanteek: "/games/semanteek-card.png",
-  semantic: "/games/semanteek-card.png",
   "chess-blitz": "/games/chess-blitz-card.png",
   chess: "/games/chess-blitz-card.png",
   "scribble-scrattle": "/games/scribble-scrattle-card.png",

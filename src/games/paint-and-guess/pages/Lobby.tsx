@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -19,6 +19,8 @@ export default function Lobby({ onEnterRoom }: { onEnterRoom: () => void }) {
   });
   const [isCreating, setIsCreating] = useState(false);
   const [isJoining, setIsJoining] = useState(false);
+  const [profileLoading, setProfileLoading] = useState(true);
+  const profileFetchedRef = useRef(false);
 
   useEffect(() => {
     const handleAvatarUpdate = (event: Event) => {
@@ -32,6 +34,8 @@ export default function Lobby({ onEnterRoom }: { onEnterRoom: () => void }) {
 
   // Auto-fill player name from Supabase profile
   useEffect(() => {
+    if (profileFetchedRef.current) return;
+    profileFetchedRef.current = true;
     supabase.auth.getUser().then(({ data }) => {
       if (data.user) {
         supabase
@@ -41,9 +45,13 @@ export default function Lobby({ onEnterRoom }: { onEnterRoom: () => void }) {
           .single()
           .then(({ data: profile }) => {
             if (profile?.username) setPlayerName(profile.username);
-          });
+          })
+          .catch(() => {})
+          .finally(() => setProfileLoading(false));
+      } else {
+        setProfileLoading(false);
       }
-    });
+    }).catch(() => setProfileLoading(false));
   }, []);
 
   const handleCreateRoom = async () => {

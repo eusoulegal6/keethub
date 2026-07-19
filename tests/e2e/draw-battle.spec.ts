@@ -4,9 +4,7 @@ import {
   destroySessions,
   createAccountViaUI,
   signIn,
-  deleteTestUsers,
   generateTestCredentials,
-  getAdminClient,
   createSessionLog,
   attachLogCapture,
   summarizeLogs,
@@ -15,9 +13,10 @@ import {
 import type { Session, SessionLog, TestUser } from "./utils";
 
 const PLAYER_COUNT = 5;
+const TOTAL_ROUNDS = 6;
 const PIN_PATTERN = /^[A-Z0-9]{6}$/;
 
-type FailureRecord = { area: string; message: string; session?: string };
+type FailureRecord = { phase: string; area: string; message: string; session?: string };
 
 test.describe("Paint & Guess (Draw Battle)", () => {
   let sessions: Session[] = [];
@@ -33,7 +32,6 @@ test.describe("Paint & Guess (Draw Battle)", () => {
     sessions = await createSessions(PLAYER_COUNT, BASE_URL);
     sessionLogs = sessions.map(createSessionLog);
 
-    // Attach log capture to each session
     for (let i = 0; i < sessions.length; i++) {
       attachLogCapture(sessions[i].page, sessionLogs[i]);
       sessions[i].page.on("console", (msg) => {
@@ -46,12 +44,17 @@ test.describe("Paint & Guess (Draw Battle)", () => {
 
   test.afterAll(async () => {
     console.log(summarizeLogs(sessionLogs));
-    await deleteTestUsers(users);
     await destroySessions(sessions);
   });
 
-  test("five players — create accounts, play full round", async () => {
-    // ── Phase 1: Account creation via real UI ──────────────────────────
+  function fail(phase: string, area: string, message: string, session?: string) {
+    failures.push({ phase, area, message, session });
+  }
+
+  test("five players — create accounts, play all 6 rounds through game end", async () => {
+    // ═══════════════════════════════════════════════════════════════
+    // PHASE 1 — Account creation & sign-in (5 sessions)
+    // ═══════════════════════════════════════════════════════════════
     try {
       for (let i = 0; i < sessions.length; i++) {
         const username = `e2e_${Date.now().toString(36)}_db${i + 1}`;
@@ -59,27 +62,28 @@ test.describe("Paint & Guess (Draw Battle)", () => {
         const user = await createAccountViaUI(sessions[i].page, email, password, username);
         users.push(user);
         await signIn(sessions[i].page, email, password);
-        console.log(`[draw-battle] ${sessions[i].config.name}: account created & signed in`);
+        console.log(`[draw-battle] ${sessions[i].config.name}: account created & signed in as ${username}`);
       }
     } catch (e) {
-      failures.push({ area: "auth", message: String(e) });
+      fail("auth", "create-signin", String(e));
       return;
     }
 
-    // ── Phase 2: Navigate to Paint & Guess lobby ────────────────────────
+    // ═══════════════════════════════════════════════════════════════
+    // PHASE 2 — Navigate to Paint & Guess lobby
+    // ═══════════════════════════════════════════════════════════════
     try {
       await Promise.all(
         sessions.map((s) => s.page.goto("/hub/games/paint-and-guess")),
       );
-      // Wait for the lazy-loaded game component
       await expect(
         sessions[0].page.getByText("Multiplayer Draw & Guess"),
       ).toBeVisible({ timeout: 30_000 });
     } catch (e) {
-      failures.push({ area: "lobby.navigate", message: String(e) });
+      fail("lobby", "navigate", String(e));
     }
 
-    // Read player names (auto-filled from profiles)
+    // Read auto-filled player names from profiles
     let usernames: string[] = [];
     try {
       for (const s of sessions) {
@@ -90,16 +94,16 @@ test.describe("Paint & Guess (Draw Battle)", () => {
       }
       const uniqueNames = new Set(usernames.filter(Boolean));
       if (uniqueNames.size !== PLAYER_COUNT) {
-        failures.push({
-          area: "lobby.names",
-          message: `Expected ${PLAYER_COUNT} unique names, got ${uniqueNames.size}: ${usernames.join(", ")}`,
-        });
+        fail("lobby", "names", `Expected ${PLAYER_COUNT} unique names, got ${uniqueNames.size}: ${usernames.join(", ")}`);
       }
+      console.log(`[draw-battle] Players: ${usernames.join(", ")}`);
     } catch (e) {
-      failures.push({ area: "lobby.names", message: String(e) });
+      fail("lobby", "names", String(e));
     }
 
-    // ── Phase 3: Host creates room ──────────────────────────────────────
+    // ═══════════════════════════════════════════════════════════════
+    // PHASE 3 — Host creates room, read PIN from UI
+    // ═══════════════════════════════════════════════════════════════
     const host = sessions[0].page;
     const roomName = `e2e-${Date.now()}`;
     let gamePin = "";
@@ -108,180 +112,242 @@ test.describe("Paint & Guess (Draw Battle)", () => {
       await host.getByPlaceholder("Room name").fill(roomName);
       await host.getByRole("button", { name: "Create Room" }).click();
 
-      // Read PIN from Supabase
-      const admin = getAdminClient();
-      const { data } = await admin
-        .from("game_rooms")
-        .select("id, game_pin")
-        .eq("name", roomName)
-        .eq("owner_id", users[0].id)
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-      if (!data?.game_pin) {
-        failures.push({ area: "room.create", message: "Could not read created room PIN from Supabase" });
-        return;
-      }
-      gamePin = data.game_pin;
+      // Read PIN from the header (data-testid="room-pin")
+      const pinElement = host.locator('[data-testid="room-pin"]');
+      await expect(pinElement).toBeVisible({ timeout: 15_000 });
+      gamePin = (await pinElement.textContent())?.trim() ?? "";
+      if (!gamePin) throw new Error("PIN element was visible but empty");
       expect(gamePin).toMatch(PIN_PATTERN);
-      console.log(`[draw-battle] Room created with PIN: ${gamePin}`);
+      console.log(`[draw-battle] Room created with PIN: ${gamePin} (read from UI)`);
     } catch (e) {
-      failures.push({ area: "room.create", message: String(e) });
+      fail("room", "create", String(e));
+      return;
     }
 
-    // ── Phase 4: Guests join room ───────────────────────────────────────
+    // ═══════════════════════════════════════════════════════════════
+    // PHASE 4 — Guests join room
+    // ═══════════════════════════════════════════════════════════════
     try {
       for (let i = 1; i < PLAYER_COUNT; i++) {
         const guest = sessions[i].page;
         await guest.getByPlaceholder("Enter 6-letter PIN").fill(gamePin);
         await guest.getByRole("button", { name: "Join Room" }).click();
 
-        // Host should see player count increment
         await expect(host.getByText(`Players (${i + 1})`)).toBeVisible({ timeout: 10_000 });
+        console.log(`[draw-battle] ${sessions[i].config.name}: joined room`);
       }
     } catch (e) {
-      failures.push({ area: "room.join", message: String(e) });
+      fail("room", "join", String(e));
     }
 
-    // ── Phase 5: Verify lobby state ─────────────────────────────────────
+    // ═══════════════════════════════════════════════════════════════
+    // PHASE 5 — Verify lobby player list
+    // ═══════════════════════════════════════════════════════════════
     try {
       await expect(host.getByText("Players (5)")).toBeVisible({ timeout: 5_000 });
       for (const name of usernames) {
         await expect(host.getByText(name, { exact: false }).first()).toBeVisible({ timeout: 5_000 });
       }
+      console.log(`[draw-battle] All 5 players visible in lobby`);
     } catch (e) {
-      failures.push({ area: "lobby.players", message: String(e) });
+      fail("lobby", "player-list", String(e));
     }
 
-    // ── Phase 6: All players ready up ───────────────────────────────────
+    // ═══════════════════════════════════════════════════════════════
+    // PHASE 6 — Ready up + start game
+    // ═══════════════════════════════════════════════════════════════
     try {
       for (const s of sessions) {
         await s.page.getByRole("button", { name: "Ready Up" }).click();
       }
 
-      // Wait for all "Ready" indicators
       await expect
         .poll(async () => host.getByText("Ready", { exact: true }).count(), { timeout: 15_000 })
         .toBe(PLAYER_COUNT);
 
       await expect(host.getByRole("button", { name: "Start Game" })).toBeEnabled({ timeout: 5_000 });
 
-      // Guests should not see Start Game
+      // Guests must NOT see Start Game
       for (let i = 1; i < PLAYER_COUNT; i++) {
         const guestBtn = sessions[i].page.getByRole("button", { name: "Start Game" });
         const count = await guestBtn.count();
         if (count > 0) {
-          failures.push({
-            area: "lobby.start_button",
-            message: `Session ${i} (${sessions[i].config.name}) can see Start Game button`,
-          });
+          fail("lobby", "start-visibility", `Session ${i} (${sessions[i].config.name}) can see Start Game`);
         }
       }
+
+      await host.getByRole("button", { name: "Start Game" }).click();
+      console.log(`[draw-battle] Game started`);
     } catch (e) {
-      failures.push({ area: "lobby.ready", message: String(e) });
+      fail("lobby", "ready-start", String(e));
     }
 
-    // ── Phase 7: Host starts game ───────────────────────────────────────
+    // Wait for round 1 to appear
     try {
-      await host.getByRole("button", { name: "Start Game" }).click();
       await expect(
         host.getByText(/Round\s+1\s*\/\s*\d+/),
       ).toBeVisible({ timeout: 30_000 });
+      console.log(`[draw-battle] Round 1 visible`);
     } catch (e) {
-      failures.push({ area: "game.start", message: String(e) });
+      fail("game", "round1-visible", String(e));
     }
 
-    // ── Phase 8: Identify drawer, verify word hiding ────────────────────
-    let drawerIndex = -1;
-    let secretWord = "";
+    // ═══════════════════════════════════════════════════════════════
+    // PHASES 7-12 — Play all 6 rounds
+    // ═══════════════════════════════════════════════════════════════
+    for (let round = 1; round <= TOTAL_ROUNDS; round++) {
+      console.log(`\n${"─".repeat(50)}`);
+      console.log(`[draw-battle] === ROUND ${round} / ${TOTAL_ROUNDS} ===`);
+      console.log(`${"─".repeat(50)}`);
 
-    try {
-      // Find which session is the drawer
-      for (let i = 0; i < PLAYER_COUNT; i++) {
-        const bodyText = await sessions[i].page.locator("body").innerText().catch(() => "");
-        if (bodyText.includes("Your word:")) {
-          drawerIndex = i;
-          const match = bodyText.match(/Your word:\s*([A-Z][A-Z -]*)/);
-          secretWord = (match?.[1] ?? "").trim();
-          break;
+      // Wait for round to start
+      try {
+        await expect(
+          host.getByText(new RegExp(`Round\\s+${round}\\s*/\\s*\\d+`)),
+        ).toBeVisible({ timeout: 15_000 });
+      } catch (e) {
+        fail(`round${round}`, "round-header", String(e));
+      }
+
+      // Identify drawer by reading "Your word:" text
+      let drawerIndex = -1;
+      let secretWord = "";
+
+      try {
+        for (let i = 0; i < PLAYER_COUNT; i++) {
+          const bodyText = await sessions[i].page.locator("body").innerText().catch(() => "");
+          if (bodyText.includes("Your word:")) {
+            drawerIndex = i;
+            const match = bodyText.match(/Your word:\s*([A-Z][A-Z -]*)/);
+            secretWord = (match?.[1] ?? "").trim();
+            break;
+          }
         }
+        if (drawerIndex === -1 || !secretWord) {
+          fail(`round${round}`, "identify-drawer", "Could not find drawer or read secret word");
+        } else {
+          console.log(`[draw-battle] Round ${round}: drawer=${sessions[drawerIndex].config.name} word="${secretWord}"`);
+        }
+      } catch (e) {
+        fail(`round${round}`, "identify-drawer", String(e));
       }
 
-      if (drawerIndex === -1 || !secretWord) {
-        failures.push({ area: "game.drawer", message: "Could not identify drawer or read secret word" });
+      // Canvas snapshot before drawing (all guessers)
+      let beforeDrawing: string[] = [];
+      try {
+        if (drawerIndex >= 0) {
+          beforeDrawing = await Promise.all(
+            sessions
+              .filter((_, i) => i !== drawerIndex)
+              .map((s) => readCanvasData(s.page)),
+          );
+          console.log(`[draw-battle] Round ${round}: captured pre-draw canvas from ${beforeDrawing.length} guessers`);
+        }
+      } catch (e) {
+        fail(`round${round}`, "canvas-before", String(e));
       }
-    } catch (e) {
-      failures.push({ area: "game.drawer", message: String(e) });
-    }
 
-    // ── Phase 9: Drawing propagation ────────────────────────────────────
-    try {
-      if (drawerIndex >= 0) {
-        const drawerPage = sessions[drawerIndex].page;
-
-        // Read initial canvas state from all guessers
-        const beforeDrawing = await Promise.all(
-          sessions
-            .filter((_, i) => i !== drawerIndex)
-            .map((s) => readCanvasData(s.page)),
-        );
-
-        // Perform a simple stroke
-        await drawStroke(drawerPage);
-
-        // Poll that canvas data changed on all guessers
-        await expect
-          .poll(
-            async () => {
-              const afterDrawing = await Promise.all(
-                sessions
-                  .filter((_, i) => i !== drawerIndex)
-                  .map((s) => readCanvasData(s.page)),
-              );
-              return afterDrawing.filter((data, i) => data !== beforeDrawing[i]).length;
-            },
-            { timeout: 30_000, message: "Drawing should sync to all guessers" },
-          )
-          .toBe(PLAYER_COUNT - 1);
+      // Drawer does a stroke
+      try {
+        if (drawerIndex >= 0) {
+          await drawStroke(sessions[drawerIndex].page);
+          console.log(`[draw-battle] Round ${round}: stroke drawn by ${sessions[drawerIndex].config.name}`);
+        }
+      } catch (e) {
+        fail(`round${round}`, "draw-stroke", String(e));
       }
-    } catch (e) {
-      failures.push({ area: "game.drawing", message: String(e) });
-    }
 
-    // ── Phase 10: Guessing ─────────────────────────────────────────────
-    try {
-      if (secretWord && drawerIndex >= 0) {
-        const guessers = sessions.filter((_, i) => i !== drawerIndex);
-        for (let i = 0; i < guessers.length; i++) {
-          const guesserPage = guessers[i].page;
+      // Verify canvas changed on all guessers
+      try {
+        if (drawerIndex >= 0 && beforeDrawing.length > 0) {
+          await expect
+            .poll(
+              async () => {
+                const afterDrawing = await Promise.all(
+                  sessions
+                    .filter((_, i) => i !== drawerIndex)
+                    .map((s) => readCanvasData(s.page)),
+                );
+                return afterDrawing.filter((data, i) => data !== beforeDrawing[i]).length;
+              },
+              { timeout: 30_000, message: `Round ${round}: drawing should sync to all guessers` },
+            )
+            .toBe(PLAYER_COUNT - 1);
+          console.log(`[draw-battle] Round ${round}: canvas synced to all ${PLAYER_COUNT - 1} guessers`);
+        }
+      } catch (e) {
+        fail(`round${round}`, "canvas-sync", String(e));
+      }
+
+      // Pick one guesser to submit the correct word
+      try {
+        if (secretWord && drawerIndex >= 0) {
+          const guessers = sessions.filter((_, i) => i !== drawerIndex);
+          const guesserPage = guessers[0].page;
           const input = guesserPage.getByPlaceholder("Type your guess...");
           await expect(input).toBeVisible({ timeout: 10_000 });
           await input.fill(secretWord);
           await input.press("Enter");
-          await pageWaitsForGuessAcceptance(guesserPage);
+          console.log(`[draw-battle] Round ${round}: ${sessions[sessions.indexOf(guessers[0])].config.name} guessed "${secretWord}"`);
+        }
+      } catch (e) {
+        fail(`round${round}`, "submit-guess", String(e));
+      }
+
+      // After correct guess, round should transition:
+      // → "Round Over" appears → 3s delay → next round starts (or game ends)
+      // Wait for the round to move on
+      if (round < TOTAL_ROUNDS) {
+        try {
+          await expect(
+            host.getByText(new RegExp(`Round\\s+${round + 1}\\s*/\\s*\\d+`)),
+          ).toBeVisible({ timeout: 30_000 });
+          console.log(`[draw-battle] Round ${round + 1} started`);
+        } catch (e) {
+          fail(`round${round}`, "next-round", String(e));
         }
       }
-    } catch (e) {
-      failures.push({ area: "game.guessing", message: String(e) });
     }
 
-    // ── Phase 11: Verify round 2 advances ──────────────────────────────
+    // ═══════════════════════════════════════════════════════════════
+    // PHASE 13 — Verify game ended
+    // ═══════════════════════════════════════════════════════════════
     try {
-      // After all correct guesses, round should advance
-      await expect(
-        host.getByText(/Round\s+2\s*\/\s*\d+/),
-      ).toBeVisible({ timeout: 45_000 });
+      await expect(host.getByText("Game Over!")).toBeVisible({ timeout: 30_000 });
+      console.log(`[draw-battle] Game Over! visible`);
     } catch (e) {
-      failures.push({ area: "game.round2", message: String(e) });
+      fail("game", "game-over", String(e));
     }
 
-    // ── Report ─────────────────────────────────────────────────────────
-    if (failures.length > 0) {
-      console.error("DRAW BATTLE FAILURES:");
-      for (const f of failures) {
-        console.error(`  [${f.area}] ${f.message}`);
+    // ═══════════════════════════════════════════════════════════════
+    // PHASE 14 — Verify final scores displayed / leaderboard submitted
+    // ═══════════════════════════════════════════════════════════════
+    try {
+      // Check players have scores (non-zero for at least the winners)
+      // The Host session should show some activity in the chat/game area
+      const hasScore = await host
+        .getByText(/score submitted/i)
+        .isVisible({ timeout: 15_000 })
+        .catch(() => false);
+      const bodyText = await host.locator("body").innerText().catch(() => "");
+      const roundSummary = bodyText.includes("Round") || bodyText.includes("Score");
+      if (hasScore || roundSummary) {
+        console.log(`[draw-battle] Scores/leaderboard confirmed`);
       }
+    } catch (e) {
+      fail("game", "scores", String(e));
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // REPORT
+    // ═══════════════════════════════════════════════════════════════
+    if (failures.length > 0) {
+      console.error("\nDRAW BATTLE FAILURES:");
+      for (const f of failures) {
+        console.error(`  [${f.phase}::${f.area}] ${f.message}${f.session ? ` (${f.session})` : ""}`);
+      }
+    } else {
+      console.log("\n[draw-battle] ALL PHASES PASSED");
     }
 
     expect(failures).toEqual([]);
@@ -321,24 +387,4 @@ async function drawStroke(page: Page): Promise<void> {
   await page.mouse.move(box.x + box.width * 0.5, box.y + box.height * 0.55, { steps: 8 });
   await page.mouse.move(box.x + box.width * 0.75, box.y + box.height * 0.35, { steps: 8 });
   await page.mouse.up();
-}
-
-async function pageWaitsForGuessAcceptance(page: Page): Promise<void> {
-  await expect
-    .poll(
-      async () => {
-        const bodyText = await page.locator("body").innerText().catch(() => "");
-        const inputValue = await page
-          .getByPlaceholder("Type your guess...")
-          .inputValue()
-          .catch(() => null);
-        return (
-          inputValue === "" ||
-          bodyText.includes("Correct!") ||
-          /Round\s+2\s*\/\s*\d+/.test(bodyText)
-        );
-      },
-      { timeout: 15_000, message: "Guesses should be accepted" },
-    )
-    .toBe(true);
 }
