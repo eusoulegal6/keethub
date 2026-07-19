@@ -105,6 +105,10 @@ BEGIN
   WHERE room_id = room_row.id
   ORDER BY random() LIMIT 1;
 
+  -- Reset guess state from previous game (handles re-start after game-ended)
+  UPDATE public.game_room_players SET has_guessed = false
+  WHERE room_id = p_room_id;
+
   INSERT INTO public.game_round_secrets (room_id, round_number, word)
   VALUES (p_room_id, 1, new_word);
 

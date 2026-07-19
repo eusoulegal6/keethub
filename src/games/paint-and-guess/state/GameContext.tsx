@@ -739,7 +739,13 @@ export function GameProvider({ children }: { children: ReactNode }) {
         });
         fetchRoomPlayers(gameState.roomId);
 
-        void advanceRound(gameState.roomId);
+        // Force the deadline to expire so the timer fires advanceRound
+        // on its next tick. Without this, a correct guess at T=5s means
+        // waiting 55s for the 60s timer to expire naturally.
+        setGameState((prev) => ({
+          ...prev,
+          round: { ...prev.round, deadlineAt: Date.now() - 1 },
+        }));
       } else if (!result?.already_guessed) {
         setChatMessages((prev) => [...prev, createChatMessage(player, guess, "wrong-guess")]);
         channelRef.current.broadcast("wrong-guess", { player, guess });
