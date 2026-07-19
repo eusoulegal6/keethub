@@ -93,7 +93,7 @@ export default function Lobby({ onEnterRoom }: { onEnterRoom: () => void }) {
     try {
       const pin = gamePin.toUpperCase().trim();
       const { data, error } = await supabase.rpc("join_paint_room", {
-        game_pin: pin,
+        p_game_pin: pin,
       });
 
       if (error || !(data as any)?.success) {

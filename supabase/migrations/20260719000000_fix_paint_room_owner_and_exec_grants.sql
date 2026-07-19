@@ -130,9 +130,11 @@ BEGIN
 END;
 $$;
 
--- join_paint_room: same as original, just with NULL auth guard
--- (RETURNING id INTO with ON CONFLICT can behave unexpectedly in some PG versions)
-CREATE OR REPLACE FUNCTION public.join_paint_room(game_pin TEXT)
+-- join_paint_room: rename parameter to p_game_pin to avoid ambiguity with
+-- the game_rooms.game_pin column. The original used join_paint_room.game_pin
+-- but this qualifier is fragile across redeploys.
+DROP FUNCTION IF EXISTS public.join_paint_room(TEXT);
+CREATE OR REPLACE FUNCTION public.join_paint_room(p_game_pin TEXT)
 RETURNS JSONB LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
 DECLARE
   target_room public.game_rooms%ROWTYPE;
@@ -145,7 +147,7 @@ BEGIN
   END IF;
 
   SELECT * INTO target_room FROM public.game_rooms
-  WHERE game_pin = join_paint_room.game_pin;
+  WHERE game_pin = p_game_pin;
 
   IF target_room.id IS NULL THEN
     RETURN jsonb_build_object('success', false, 'error', 'Invalid game PIN');
