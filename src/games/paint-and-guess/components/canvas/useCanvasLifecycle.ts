@@ -16,6 +16,7 @@ interface UseCanvasLifecycleOptions {
   brushOpacity: number;
   brushHardness: number;
   activeTool: "draw" | "erase";
+  roomId: string | null;
 }
 
 interface UseCanvasLifecycleReturn {
@@ -37,10 +38,12 @@ export function useCanvasLifecycle({
   brushOpacity,
   brushHardness,
   activeTool,
+  roomId,
 }: UseCanvasLifecycleOptions): UseCanvasLifecycleReturn {
   const [fabricCanvas, setFabricCanvas] = useState<FabricCanvas | null>(null);
   const isDisposedRef = useRef(false);
   const canvasReadyRef = useRef(false);
+  const lastRoomIdRef = useRef<string | null>(null);
 
   // Calculate optimal canvas size based on container dimensions
   const calculateCanvasSize = useCallback((): CanvasSize => {
@@ -137,10 +140,7 @@ export function useCanvasLifecycle({
   useEffect(() => {
     if (!canvasRef.current) return;
 
-    console.debug("[CanvasLifecycle] Initializing new canvas", {
-      isGameActive,
-      isDrawer,
-    });
+    console.debug("[CanvasLifecycle] Initializing new canvas", { roomId });
 
     isDisposedRef.current = false;
     canvasReadyRef.current = false;
@@ -289,7 +289,37 @@ export function useCanvasLifecycle({
         console.debug("[CanvasLifecycle] Error disposing canvas:", error);
       }
     };
-  }, [canvasRef, containerRef, isGameActive, isDrawer, calculateCanvasSize, isCanvasValid]);
+  }, [canvasRef, containerRef, roomId, calculateCanvasSize, isCanvasValid]);
+  // Canvas is now long-lived — initialized once per game (roomId change).
+  // isDrawer and isGameActive toggles are handled below without recreation.
+
+  // Toggle drawing mode without recreating the canvas
+  useEffect(() => {
+    if (!isCanvasValid(fabricCanvas) || !fabricCanvas) return;
+    fabricCanvas.isDrawingMode = isGameActive && isDrawer;
+    if (!isDrawer) {
+      fabricCanvas.selection = false;
+      fabricCanvas.defaultCursor = "default";
+      fabricCanvas.hoverCursor = "default";
+      fabricCanvas.moveCursor = "default";
+      fabricCanvas.skipTargetFind = true;
+    } else {
+      fabricCanvas.skipTargetFind = false;
+      fabricCanvas.defaultCursor = "crosshair";
+    }
+    fabricCanvas.renderAll();
+  }, [isGameActive, isDrawer, fabricCanvas, isCanvasValid]);
+
+  // Reset canvas content when roomId changes
+  useEffect(() => {
+    if (roomId && roomId !== lastRoomIdRef.current) {
+      lastRoomIdRef.current = roomId;
+      if (isCanvasValid(fabricCanvas) && fabricCanvas) {
+        fabricCanvas.clear();
+        fabricCanvas.renderAll();
+      }
+    }
+  }, [roomId, fabricCanvas, isCanvasValid]);
 
   // Update brush properties when they change (without re-initializing canvas)
   useEffect(() => {
