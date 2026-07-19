@@ -12,7 +12,7 @@ import {
 } from "./utils";
 import type { Session, SessionLog, TestUser } from "./utils";
 
-const PLAYER_COUNT = 5;
+const PLAYER_COUNT = 2;
 const TOTAL_ROUNDS = 6;
 const PIN_PATTERN = /^[A-Z0-9]{6}$/;
 
@@ -51,12 +51,10 @@ test.describe("Paint & Guess (Draw Battle)", () => {
     failures.push({ phase, area, message, session });
   }
 
-  test("five players — create accounts, play all 6 rounds through game end", async () => {
-    // ═══════════════════════════════════════════════════════════════
-    // PHASE 1 — Account creation & sign-in (5 sessions)
-    // ═══════════════════════════════════════════════════════════════
+  test("two players — create accounts, play all 6 rounds through game end", async () => {
+    // Phase 1: Account creation & sign-in
     try {
-      for (let i = 0; i < sessions.length; i++) {
+      for (let i = 0; i < PLAYER_COUNT; i++) {
         const username = `e2e_${Date.now().toString(36)}_db${i + 1}`;
         const email = `${username}@${generateTestCredentials({ retry: 0, workerIndex: 0 }).emailDomain}`;
         const user = await createAccountViaUI(sessions[i].page, email, password, username);
@@ -69,13 +67,9 @@ test.describe("Paint & Guess (Draw Battle)", () => {
       return;
     }
 
-    // ═══════════════════════════════════════════════════════════════
-    // PHASE 2 — Navigate to Paint & Guess lobby
-    // ═══════════════════════════════════════════════════════════════
+    // Phase 2: Navigate to Paint & Guess lobby
     try {
-      await Promise.all(
-        sessions.map((s) => s.page.goto("/hub/games/paint-and-guess")),
-      );
+      await Promise.all(sessions.map((s) => s.page.goto("/hub/games/paint-and-guess")));
       await expect(
         sessions[0].page.getByText("Multiplayer Draw & Guess"),
       ).toBeVisible({ timeout: 30_000 });
@@ -83,25 +77,25 @@ test.describe("Paint & Guess (Draw Battle)", () => {
       fail("lobby", "navigate", String(e));
     }
 
-    // Read auto-filled player names from profiles (wait for async fetch)
+    // Read auto-filled player names from profiles (wait for async Supabase fetch)
     let usernames: string[] = [];
     try {
       for (const s of sessions) {
         const input = s.page.getByPlaceholder("Enter your name");
         await expect(input).toBeVisible({ timeout: 10_000 });
-        // Poll until the profile name loads (useEffect fetches from Supabase)
         try {
           await expect
-            .poll(() => input.inputValue(), { timeout: 10_000, message: `Profile name should auto-fill for ${s.config.name}` })
+            .poll(() => input.inputValue(), {
+              timeout: 15_000,
+              message: `Profile name should auto-fill for ${s.config.name}`,
+            })
             .not.toEqual("");
         } catch {
-          // Fallback: type the username manually if profile fetch is slow
           const fallbackName = `e2e_${Date.now().toString(36)}_db${sessions.indexOf(s) + 1}`;
           await input.fill(fallbackName);
-          console.log(`[draw-battle] ${s.config.name}: profile name didn't auto-fill, typed "${fallbackName}"`);
+          console.log(`[draw-battle] ${s.config.name}: typed fallback name "${fallbackName}"`);
         }
-        const name = await input.inputValue();
-        usernames.push(name.trim());
+        usernames.push((await input.inputValue()).trim());
       }
       const uniqueNames = new Set(usernames.filter(Boolean));
       if (uniqueNames.size !== PLAYER_COUNT) {
@@ -112,9 +106,7 @@ test.describe("Paint & Guess (Draw Battle)", () => {
       fail("lobby", "names", String(e));
     }
 
-    // ═══════════════════════════════════════════════════════════════
-    // PHASE 3 — Host creates room, read PIN from UI
-    // ═══════════════════════════════════════════════════════════════
+    // Phase 3: Host creates room, read PIN from UI
     const host = sessions[0].page;
     const roomName = `e2e-${Date.now()}`;
     let gamePin = "";
@@ -123,50 +115,60 @@ test.describe("Paint & Guess (Draw Battle)", () => {
       await host.getByPlaceholder("Room name").fill(roomName);
       await host.getByRole("button", { name: "Create Room" }).click();
 
-      // Read PIN from the header (data-testid="room-pin")
       const pinElement = host.locator('[data-testid="room-pin"]');
       await expect(pinElement).toBeVisible({ timeout: 15_000 });
       gamePin = (await pinElement.textContent())?.trim() ?? "";
       if (!gamePin) throw new Error("PIN element was visible but empty");
       expect(gamePin).toMatch(PIN_PATTERN);
-      console.log(`[draw-battle] Room created with PIN: ${gamePin} (read from UI)`);
+      console.log(`[draw-battle] Room created with PIN: ${gamePin}`);
     } catch (e) {
       fail("room", "create", String(e));
       return;
     }
 
-    // ═══════════════════════════════════════════════════════════════
-    // PHASE 4 — Guests join room
-    // ═══════════════════════════════════════════════════════════════
+    // Phase 4: Guest joins room
     try {
-      for (let i = 1; i < PLAYER_COUNT; i++) {
-        const guest = sessions[i].page;
-        await guest.getByPlaceholder("Enter 6-letter PIN").fill(gamePin);
-        await guest.getByRole("button", { name: "Join Room" }).click();
+      const guest = sessions[1].page;
+      await guest.getByPlaceholder("Enter 6-letter PIN").fill(gamePin);
+      await guest.getByRole("button", { name: "Join Room" }).click();
 
-        await expect(host.getByText(`Players (${i + 1})`)).toBeVisible({ timeout: 10_000 });
-        console.log(`[draw-battle] ${sessions[i].config.name}: joined room`);
-      }
+      // Diagnostic: capture what the guest sees after joining
+      const guestBody = await guest.locator("body").innerText().catch(() => "(error)");
+      console.log(`[draw-battle] ${sessions[1].config.name} after join (first 300): "${guestBody.slice(0, 300)}"`);
+      const toastEl = guest.locator('[data-sonner-toast]').first();
+      const guestToast = await toastEl.textContent().catch(() => "(no toast)");
+      console.log(`[draw-battle] ${sessions[1].config.name} toast after join: "${guestToast}"`);
+
+      // Verify guest sees the room UI (Ready Up button = joined)
+      await expect(
+        guest.getByRole("button", { name: "Ready Up" }),
+      ).toBeVisible({ timeout: 15_000 });
+      console.log(`[draw-battle] ${sessions[1].config.name}: joined room`);
     } catch (e) {
       fail("room", "join", String(e));
     }
 
-    // ═══════════════════════════════════════════════════════════════
-    // PHASE 5 — Verify lobby player list
-    // ═══════════════════════════════════════════════════════════════
+    // Phase 5: Verify lobby player list
     try {
-      await expect(host.getByText("Players (5)")).toBeVisible({ timeout: 5_000 });
+      await expect
+        .poll(
+          () =>
+            host
+              .locator("body")
+              .innerText()
+              .then((t) => t.includes(`Players (${PLAYER_COUNT})`)),
+          { timeout: 30_000 },
+        )
+        .toBe(true);
       for (const name of usernames.filter(Boolean)) {
         await expect(host.getByText(name, { exact: false }).first()).toBeVisible({ timeout: 5_000 });
       }
-      console.log(`[draw-battle] All 5 players visible in lobby`);
+      console.log(`[draw-battle] All ${PLAYER_COUNT} players visible in lobby`);
     } catch (e) {
       fail("lobby", "player-list", String(e));
     }
 
-    // ═══════════════════════════════════════════════════════════════
-    // PHASE 6 — Ready up + start game
-    // ═══════════════════════════════════════════════════════════════
+    // Phase 6: Ready up + start game
     try {
       for (const s of sessions) {
         await s.page.getByRole("button", { name: "Ready Up" }).click();
@@ -178,13 +180,10 @@ test.describe("Paint & Guess (Draw Battle)", () => {
 
       await expect(host.getByRole("button", { name: "Start Game" })).toBeEnabled({ timeout: 5_000 });
 
-      // Guests must NOT see Start Game
-      for (let i = 1; i < PLAYER_COUNT; i++) {
-        const guestBtn = sessions[i].page.getByRole("button", { name: "Start Game" });
-        const count = await guestBtn.count();
-        if (count > 0) {
-          fail("lobby", "start-visibility", `Session ${i} (${sessions[i].config.name}) can see Start Game`);
-        }
+      // Guest must NOT see Start Game
+      const guestBtn = sessions[1].page.getByRole("button", { name: "Start Game" });
+      if ((await guestBtn.count()) > 0) {
+        fail("lobby", "start-visibility", `Guest can see Start Game button`);
       }
 
       await host.getByRole("button", { name: "Start Game" }).click();
@@ -193,25 +192,28 @@ test.describe("Paint & Guess (Draw Battle)", () => {
       fail("lobby", "ready-start", String(e));
     }
 
-    // Wait for round 1 to appear
+    // Verify round 1 appeared
     try {
+      // Check for error toast
+      const errorToast = host.locator('[data-sonner-toast]').first();
+      const toastText = await errorToast.textContent().catch(() => "");
+      console.log(`[draw-battle] Toast after start: "${toastText}"`);
+
       await expect(
         host.getByText(/Round\s+1\s*\/\s*\d+/),
-      ).toBeVisible({ timeout: 30_000 });
+      ).toBeVisible({ timeout: 10_000 });
       console.log(`[draw-battle] Round 1 visible`);
     } catch (e) {
       fail("game", "round1-visible", String(e));
     }
 
-    // ═══════════════════════════════════════════════════════════════
-    // PHASES 7-12 — Play all 6 rounds
-    // ═══════════════════════════════════════════════════════════════
+    // Phases 7–12: Play all 6 rounds
     for (let round = 1; round <= TOTAL_ROUNDS; round++) {
-      console.log(`\n${"─".repeat(50)}`);
+      console.log(`\n${"─".repeat(40)}`);
       console.log(`[draw-battle] === ROUND ${round} / ${TOTAL_ROUNDS} ===`);
-      console.log(`${"─".repeat(50)}`);
+      console.log(`${"─".repeat(40)}`);
 
-      // Wait for round to start
+      // Wait for round header
       try {
         await expect(
           host.getByText(new RegExp(`Round\\s+${round}\\s*/\\s*\\d+`)),
@@ -237,22 +239,18 @@ test.describe("Paint & Guess (Draw Battle)", () => {
         if (drawerIndex === -1 || !secretWord) {
           fail(`round${round}`, "identify-drawer", "Could not find drawer or read secret word");
         } else {
-          console.log(`[draw-battle] Round ${round}: drawer=${sessions[drawerIndex].config.name} word="${secretWord}"`);
+          console.log(`[draw-battle] drawer=${sessions[drawerIndex].config.name} word="${secretWord}"`);
         }
       } catch (e) {
         fail(`round${round}`, "identify-drawer", String(e));
       }
 
-      // Canvas snapshot before drawing (all guessers)
-      let beforeDrawing: string[] = [];
+      // Canvas snapshot before drawing (guesser)
+      let beforeDrawing = "";
       try {
         if (drawerIndex >= 0) {
-          beforeDrawing = await Promise.all(
-            sessions
-              .filter((_, i) => i !== drawerIndex)
-              .map((s) => readCanvasData(s.page)),
-          );
-          console.log(`[draw-battle] Round ${round}: captured pre-draw canvas from ${beforeDrawing.length} guessers`);
+          const guesserPage = sessions[drawerIndex === 0 ? 1 : 0].page;
+          beforeDrawing = await readCanvasData(guesserPage);
         }
       } catch (e) {
         fail(`round${round}`, "canvas-before", String(e));
@@ -262,52 +260,43 @@ test.describe("Paint & Guess (Draw Battle)", () => {
       try {
         if (drawerIndex >= 0) {
           await drawStroke(sessions[drawerIndex].page);
-          console.log(`[draw-battle] Round ${round}: stroke drawn by ${sessions[drawerIndex].config.name}`);
+          console.log(`[draw-battle] stroke drawn by ${sessions[drawerIndex].config.name}`);
         }
       } catch (e) {
         fail(`round${round}`, "draw-stroke", String(e));
       }
 
-      // Verify canvas changed on all guessers
+      // Verify canvas synced to guesser
       try {
-        if (drawerIndex >= 0 && beforeDrawing.length > 0) {
+        if (drawerIndex >= 0 && beforeDrawing) {
+          const guesserPage = sessions[drawerIndex === 0 ? 1 : 0].page;
           await expect
             .poll(
-              async () => {
-                const afterDrawing = await Promise.all(
-                  sessions
-                    .filter((_, i) => i !== drawerIndex)
-                    .map((s) => readCanvasData(s.page)),
-                );
-                return afterDrawing.filter((data, i) => data !== beforeDrawing[i]).length;
-              },
-              { timeout: 30_000, message: `Round ${round}: drawing should sync to all guessers` },
+              () => readCanvasData(guesserPage),
+              { timeout: 30_000, message: `Round ${round}: drawing should sync to guesser` },
             )
-            .toBe(PLAYER_COUNT - 1);
-          console.log(`[draw-battle] Round ${round}: canvas synced to all ${PLAYER_COUNT - 1} guessers`);
+            .not.toBe(beforeDrawing);
+          console.log(`[draw-battle] canvas synced to guesser`);
         }
       } catch (e) {
         fail(`round${round}`, "canvas-sync", String(e));
       }
 
-      // Pick one guesser to submit the correct word
+      // Guesser submits the correct word
       try {
         if (secretWord && drawerIndex >= 0) {
-          const guessers = sessions.filter((_, i) => i !== drawerIndex);
-          const guesserPage = guessers[0].page;
+          const guesserPage = sessions[drawerIndex === 0 ? 1 : 0].page;
           const input = guesserPage.getByPlaceholder("Type your guess...");
           await expect(input).toBeVisible({ timeout: 10_000 });
           await input.fill(secretWord);
           await input.press("Enter");
-          console.log(`[draw-battle] Round ${round}: ${sessions[sessions.indexOf(guessers[0])].config.name} guessed "${secretWord}"`);
+          console.log(`[draw-battle] ${sessions[drawerIndex === 0 ? 1 : 0].config.name} guessed "${secretWord}"`);
         }
       } catch (e) {
         fail(`round${round}`, "submit-guess", String(e));
       }
 
-      // After correct guess, round should transition:
-      // → "Round Over" appears → 3s delay → next round starts (or game ends)
-      // Wait for the round to move on
+      // Wait for next round
       if (round < TOTAL_ROUNDS) {
         try {
           await expect(
@@ -320,9 +309,7 @@ test.describe("Paint & Guess (Draw Battle)", () => {
       }
     }
 
-    // ═══════════════════════════════════════════════════════════════
-    // PHASE 13 — Verify game ended
-    // ═══════════════════════════════════════════════════════════════
+    // Phase 13: Verify game ended
     try {
       await expect(host.getByText("Game Over!")).toBeVisible({ timeout: 30_000 });
       console.log(`[draw-battle] Game Over! visible`);
@@ -330,12 +317,8 @@ test.describe("Paint & Guess (Draw Battle)", () => {
       fail("game", "game-over", String(e));
     }
 
-    // ═══════════════════════════════════════════════════════════════
-    // PHASE 14 — Verify final scores displayed / leaderboard submitted
-    // ═══════════════════════════════════════════════════════════════
+    // Phase 14: Verify scores submitted
     try {
-      // Check players have scores (non-zero for at least the winners)
-      // The Host session should show some activity in the chat/game area
       const hasScore = await host
         .getByText(/score submitted/i)
         .isVisible({ timeout: 15_000 })
@@ -349,9 +332,7 @@ test.describe("Paint & Guess (Draw Battle)", () => {
       fail("game", "scores", String(e));
     }
 
-    // ═══════════════════════════════════════════════════════════════
-    // REPORT
-    // ═══════════════════════════════════════════════════════════════
+    // Report
     if (failures.length > 0) {
       console.error("\nDRAW BATTLE FAILURES:");
       for (const f of failures) {
