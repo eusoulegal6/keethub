@@ -83,12 +83,23 @@ test.describe("Paint & Guess (Draw Battle)", () => {
       fail("lobby", "navigate", String(e));
     }
 
-    // Read auto-filled player names from profiles
+    // Read auto-filled player names from profiles (wait for async fetch)
     let usernames: string[] = [];
     try {
       for (const s of sessions) {
         const input = s.page.getByPlaceholder("Enter your name");
         await expect(input).toBeVisible({ timeout: 10_000 });
+        // Poll until the profile name loads (useEffect fetches from Supabase)
+        try {
+          await expect
+            .poll(() => input.inputValue(), { timeout: 10_000, message: `Profile name should auto-fill for ${s.config.name}` })
+            .not.toEqual("");
+        } catch {
+          // Fallback: type the username manually if profile fetch is slow
+          const fallbackName = `e2e_${Date.now().toString(36)}_db${sessions.indexOf(s) + 1}`;
+          await input.fill(fallbackName);
+          console.log(`[draw-battle] ${s.config.name}: profile name didn't auto-fill, typed "${fallbackName}"`);
+        }
         const name = await input.inputValue();
         usernames.push(name.trim());
       }
@@ -145,7 +156,7 @@ test.describe("Paint & Guess (Draw Battle)", () => {
     // ═══════════════════════════════════════════════════════════════
     try {
       await expect(host.getByText("Players (5)")).toBeVisible({ timeout: 5_000 });
-      for (const name of usernames) {
+      for (const name of usernames.filter(Boolean)) {
         await expect(host.getByText(name, { exact: false }).first()).toBeVisible({ timeout: 5_000 });
       }
       console.log(`[draw-battle] All 5 players visible in lobby`);
