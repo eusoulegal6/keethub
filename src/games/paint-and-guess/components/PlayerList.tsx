@@ -1,16 +1,12 @@
 import { useGame } from "@/games/paint-and-guess";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
-import { Users, Trophy, Pencil, Eye } from "lucide-react";
-import { getAvatarEmoji, DEFAULT_AVATAR } from "@/lib/avatars";
-import { AvatarConfig, decodeAvatarConfig, createDefaultAvatarConfig } from "@/lib/avatar/config";
-import { getDiceBearAvatarUrl, getDiceBearAvatarUrlFromSeed } from "@/lib/avatar/dicebear/api";
+import { cn } from "@/lib/utils";
+import { Eye, Pencil, Trophy, Users } from "lucide-react";
+import { PlayerAvatar } from "./PlayerAvatar";
 
 export function PlayerList() {
   const { gameState, currentDrawer, isGameActive } = useGame();
 
-  // Sort players: drawer first, then by score
   const sortedPlayers = [...gameState.players].sort((a, b) => {
     if (currentDrawer?.id === a.id) return -1;
     if (currentDrawer?.id === b.id) return 1;
@@ -18,134 +14,95 @@ export function PlayerList() {
   });
 
   return (
-    <Card>
-      <CardHeader className="pb-2">
-        <CardTitle className="flex items-center gap-2">
-          <Users className="w-5 h-5" />
-          Players ({gameState.players.length})
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="pt-2">
-        <div className="space-y-2">
-          {sortedPlayers.map((player) => {
-            const isHost = gameState.ownerId !== null && gameState.ownerId === player.userId;
-            const isPlayerDrawer = currentDrawer?.id === player.id;
-            const isMe = gameState.selfId === player.id;
-            return (
+    <section className="flex h-full min-h-0 flex-col overflow-hidden rounded-lg border border-[#E6EAF2] bg-white p-4 shadow-[0_14px_36px_rgba(16,32,74,0.08)]">
+      <div className="mb-4 flex items-center gap-2 text-[#10204A]">
+        <Users className="h-5 w-5 text-[#7037E8]" />
+        <h2 className="text-lg font-extrabold">Players ({gameState.players.length})</h2>
+      </div>
+
+      <div className="min-h-0 flex-1 space-y-3 overflow-y-auto pr-1">
+        {sortedPlayers.map((player) => {
+          const isHost = gameState.ownerId !== null && gameState.ownerId === player.userId;
+          const isPlayerDrawer = currentDrawer?.id === player.id;
+          const isMe = gameState.selfId === player.id;
+
+          return (
+            <div
+              key={player.id}
+              className={cn(
+                "flex items-center gap-3 rounded-lg border p-3 transition-colors",
+                isPlayerDrawer && isGameActive
+                  ? "border-[#FF86B5] bg-[#FFF1F6]"
+                  : isMe
+                    ? "border-[#8BE0DE] bg-[#ECFBFA]"
+                    : "border-[#E6EAF2] bg-[#F8FAFD]",
+              )}
+            >
               <div
-                key={player.id}
-                className={`flex items-center justify-between p-2 rounded-lg transition-colors ${
-                  isPlayerDrawer 
-                    ? "bg-primary/10 border border-primary/30" 
-                    : isMe 
-                    ? "bg-accent" 
-                    : "bg-muted"
-                }`}
+                className={cn(
+                  "flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full",
+                  isPlayerDrawer && isGameActive
+                    ? "bg-[#FF2F85] text-white"
+                    : "bg-[#EDF1F7] text-[#667085]",
+                )}
               >
-                <div className="flex items-center gap-2">
+                {isPlayerDrawer && isGameActive ? (
+                  <Pencil className="h-4 w-4" />
+                ) : (
+                  <Eye className="h-4 w-4" />
+                )}
+              </div>
+
+              <PlayerAvatar player={player} size="md" />
+
+              <div className="min-w-0 flex-1">
+                <div className="flex min-w-0 items-center gap-2">
+                  <span
+                    className={cn(
+                      "truncate text-base font-extrabold",
+                      isMe ? "text-[#FF2F85]" : "text-[#10204A]",
+                    )}
+                  >
+                    {player.name}
+                    {isMe && " (You)"}
+                  </span>
+                </div>
+
+                <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                  {isHost && (
+                    <Badge
+                      variant="outline"
+                      className="h-6 border-[#FF86B5] bg-white px-2 text-xs font-bold text-[#FF2F85]"
+                    >
+                      Host
+                    </Badge>
+                  )}
                   {isPlayerDrawer && isGameActive && (
-                    <div className="flex items-center justify-center w-6 h-6 rounded-full bg-primary text-primary-foreground">
-                      <Pencil className="w-3 h-3" />
-                    </div>
+                    <Badge className="h-6 bg-[#FF2F85] px-2 text-xs font-bold text-white">
+                      Drawing
+                    </Badge>
                   )}
-                  {!isPlayerDrawer && isGameActive && (
-                    <div className="flex items-center justify-center w-6 h-6 rounded-full bg-muted-foreground/20 text-muted-foreground">
-                      <Eye className="w-3 h-3" />
-                    </div>
+                  {!isGameActive && (
+                    <Badge
+                      className={cn(
+                        "h-6 px-2 text-xs font-bold",
+                        player.isReady ? "bg-[#10B8B5] text-white" : "bg-[#F6F1FF] text-[#7037E8]",
+                      )}
+                    >
+                      {player.isReady ? "Ready" : "Not Ready"}
+                    </Badge>
                   )}
-                  <Avatar className="h-8 w-8">
-                    {(() => {
-                    // Check if avatar is a config object (new format) or string (old format)
-                    if (!player.avatar) {
-                      // No avatar - use default emoji
-                      const defaultUrl = getDiceBearAvatarUrlFromSeed(DEFAULT_AVATAR.id, { format: 'png', size: 32 });
-                      return (
-                        <>
-                          <AvatarImage src={defaultUrl} alt={player.name} />
-                          <AvatarFallback className="text-lg bg-transparent p-0">
-                            <span>{getAvatarEmoji(DEFAULT_AVATAR.id)}</span>
-                          </AvatarFallback>
-                        </>
-                      );
-                    }
-                    
-                    // Get avatar config
-                    let avatarConfig: AvatarConfig | null = null;
-                    
-                    if (typeof player.avatar === 'string') {
-                      // Try to decode as JSON config
-                      avatarConfig = decodeAvatarConfig(player.avatar);
-                      if (!avatarConfig) {
-                        // Old emoji format - use seed-based generation
-                        const avatarUrl = getDiceBearAvatarUrlFromSeed(player.avatar, { format: 'png', size: 32 });
-                        return (
-                          <>
-                            <AvatarImage src={avatarUrl} alt={player.name} />
-                            <AvatarFallback className="text-lg bg-transparent p-0">
-                              <span>{getAvatarEmoji(player.avatar)}</span>
-                            </AvatarFallback>
-                          </>
-                        );
-                      }
-                    } else {
-                      // Already an AvatarConfig object
-                      avatarConfig = player.avatar;
-                    }
-                    
-                    // Check if custom image is uploaded
-                    if (avatarConfig?.customImageUrl) {
-                      return (
-                        <>
-                          <AvatarImage src={avatarConfig.customImageUrl} alt={player.name} />
-                          <AvatarFallback className="text-lg bg-transparent p-0">
-                            <span>{getAvatarEmoji(DEFAULT_AVATAR.id)}</span>
-                          </AvatarFallback>
-                        </>
-                      );
-                    }
-                    
-                    // Otherwise use DiceBear API
-                    const avatarUrl = getDiceBearAvatarUrl(avatarConfig, { format: 'png', size: 32 });
-                    return (
-                      <>
-                        <AvatarImage src={avatarUrl} alt={player.name} />
-                        <AvatarFallback className="text-lg bg-transparent p-0">
-                          <span>{getAvatarEmoji(DEFAULT_AVATAR.id)}</span>
-                        </AvatarFallback>
-                      </>
-                    );
-                  })()}
-                </Avatar>
-                <div className="flex flex-col min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
-                    <span className={`font-medium truncate ${isMe ? "text-primary" : ""}`}>
-                      {player.name}
-                      {isMe && " (You)"}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-1 mt-1 flex-wrap">
-                    {isHost && <Badge variant="outline" className="text-xs">Host</Badge>}
-                    {isPlayerDrawer && isGameActive && (
-                      <Badge variant="default" className="text-xs bg-primary">Drawing</Badge>
-                    )}
-                    {!isGameActive && (
-                      <Badge variant={player.isReady ? "default" : "secondary"} className="text-xs">
-                        {player.isReady ? "Ready" : "Not Ready"}
-                      </Badge>
-                    )}
-                  </div>
                 </div>
               </div>
-              <div className="flex items-center gap-1 flex-shrink-0">
-                <Trophy className="w-4 h-4 text-yellow-500" />
-                <span className="font-bold">{player.score}</span>
+
+              <div className="flex flex-shrink-0 items-center gap-1 rounded-full bg-white px-2.5 py-1 text-sm font-extrabold text-[#10204A] shadow-sm">
+                <Trophy className="h-4 w-4 text-[#FF9818]" />
+                {player.score}
               </div>
             </div>
           );
-          })}
-        </div>
-      </CardContent>
-    </Card>
+        })}
+      </div>
+    </section>
   );
 }
-

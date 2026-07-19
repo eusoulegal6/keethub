@@ -1,12 +1,9 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
-import { Paintbrush, Eraser, Undo, Trash2, Settings, ChevronDown, ChevronUp } from "lucide-react";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
+import { cn } from "@/lib/utils";
+import { ChevronDown, ChevronUp, Eraser, Paintbrush, Settings, Trash2, Undo } from "lucide-react";
+import { ColorPalette } from "./ColorPalette";
 
 interface BrushPreset {
   name: string;
@@ -26,10 +23,13 @@ const BRUSH_PRESETS: BrushPreset[] = [
 
 interface ToolbarProps {
   activeTool: "draw" | "erase";
+  activeColor: string;
   brushSize: number;
   brushOpacity: number;
   brushHardness: number;
+  hasCanvasContent: boolean;
   onToolChange: (tool: "draw" | "erase") => void;
+  onColorChange: (color: string) => void;
   onBrushSizeChange: (size: number) => void;
   onBrushOpacityChange: (opacity: number) => void;
   onBrushHardnessChange: (hardness: number) => void;
@@ -40,10 +40,13 @@ interface ToolbarProps {
 
 export const Toolbar = ({
   activeTool,
+  activeColor,
   brushSize,
   brushOpacity,
   brushHardness,
+  hasCanvasContent,
   onToolChange,
+  onColorChange,
   onBrushSizeChange,
   onBrushOpacityChange,
   onBrushHardnessChange,
@@ -51,7 +54,11 @@ export const Toolbar = ({
   onClear,
   disabled = false,
 }: ToolbarProps) => {
-  const [showAdvanced, setShowAdvanced] = useState(false);
+  const [showAdvanced, setShowAdvanced] = useState(() => !hasCanvasContent);
+
+  useEffect(() => {
+    setShowAdvanced(!hasCanvasContent);
+  }, [hasCanvasContent]);
 
   const applyPreset = (preset: BrushPreset) => {
     onBrushSizeChange(preset.size);
@@ -60,43 +67,51 @@ export const Toolbar = ({
   };
 
   return (
-    <div className="bg-toolbar-bg rounded-2xl p-4 md:p-6 shadow-medium border border-border opacity-90 w-full max-w-full min-w-0 overflow-hidden">
-      <div className="flex flex-col gap-4 w-full min-w-0">
-        {/* Main Toolbar Row */}
-        <div className="flex flex-col md:flex-row items-center gap-4 md:gap-6 w-full min-w-0">
-          {/* Drawing Tools */}
-          <div className="flex gap-2 flex-shrink-0">
+    <div className="w-full rounded-lg border border-[#E6EAF2] bg-white p-4 shadow-[0_14px_34px_rgba(16,32,74,0.07)]">
+      <div className="flex flex-col gap-4">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:gap-4">
+          <div className="flex flex-wrap items-center gap-2">
             <Button
-              variant={activeTool === "draw" ? "default" : "outline"}
+              type="button"
+              variant="ghost"
               size="lg"
               onClick={() => onToolChange("draw")}
               disabled={disabled}
               aria-label="Brush tool"
               aria-pressed={activeTool === "draw"}
-              className="gap-2 transition-all hover:scale-105"
+              className={cn(
+                "h-12 rounded-lg px-5 text-base font-extrabold shadow-sm",
+                activeTool === "draw"
+                  ? "bg-[#FF2F85] text-white hover:bg-[#E92778] hover:text-white"
+                  : "border border-[#D7DDEA] bg-white text-[#24375F] hover:bg-[#FFF1F6] hover:text-[#FF2F85]",
+              )}
             >
-              <Paintbrush className="w-5 h-5" />
-              <span className="hidden sm:inline">Brush</span>
-              <span className="sr-only"> (Press B)</span>
+              <Paintbrush className="mr-2 h-5 w-5" />
+              Brush
             </Button>
+
             <Button
-              variant={activeTool === "erase" ? "default" : "outline"}
+              type="button"
+              variant="ghost"
               size="lg"
               onClick={() => onToolChange("erase")}
               disabled={disabled}
               aria-label="Eraser tool"
               aria-pressed={activeTool === "erase"}
-              className="gap-2 transition-all hover:scale-105"
+              className={cn(
+                "h-12 rounded-lg px-5 text-base font-extrabold shadow-sm",
+                activeTool === "erase"
+                  ? "bg-[#7037E8] text-white hover:bg-[#5F2ED1] hover:text-white"
+                  : "border border-[#D7DDEA] bg-white text-[#24375F] hover:bg-[#F6F1FF] hover:text-[#7037E8]",
+              )}
             >
-              <Eraser className="w-5 h-5" />
-              <span className="hidden sm:inline">Eraser</span>
-              <span className="sr-only"> (Press E)</span>
+              <Eraser className="mr-2 h-5 w-5" />
+              Eraser
             </Button>
           </div>
 
-          {/* Brush Size */}
-          <div className="flex items-center gap-3 flex-1 min-w-0 w-full md:w-auto">
-            <span className="text-sm font-medium whitespace-nowrap flex-shrink-0">Size:</span>
+          <div className="flex min-w-0 flex-1 items-center gap-3 rounded-lg bg-[#FBFDFF] px-3 py-2">
+            <span className="flex-shrink-0 text-sm font-extrabold text-[#24375F]">Size</span>
             <Slider
               value={[brushSize]}
               onValueChange={(value) => onBrushSizeChange(value[0])}
@@ -104,126 +119,126 @@ export const Toolbar = ({
               max={50}
               step={1}
               disabled={disabled}
-              className="flex-1 min-w-0"
+              className="min-w-[120px] flex-1"
               aria-label="Brush size"
               aria-valuemin={1}
               aria-valuemax={50}
               aria-valuenow={brushSize}
             />
-            <span className="text-sm font-medium w-8 text-center flex-shrink-0">{brushSize}</span>
+            <span className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg border border-[#E6EAF2] bg-white text-base font-extrabold text-[#10204A]">
+              {brushSize}
+            </span>
           </div>
 
-          {/* Action Buttons */}
-          <div className="flex gap-2 flex-shrink-0">
+          <div className="flex flex-wrap items-center gap-2">
             <Button
-              variant="secondary"
+              type="button"
+              variant="ghost"
               size="lg"
               onClick={onUndo}
               disabled={disabled}
               aria-label="Undo last action"
-              className="gap-2 transition-all hover:scale-105"
+              className="h-12 rounded-lg bg-[#E9FBFA] px-5 text-base font-extrabold text-[#087E7D] shadow-sm hover:bg-[#D8F7F5] hover:text-[#087E7D]"
             >
-              <Undo className="w-5 h-5" />
-              <span className="hidden sm:inline">Undo</span>
-              <span className="sr-only"> (Press Ctrl+U or Cmd+U)</span>
+              <Undo className="mr-2 h-5 w-5" />
+              Undo
             </Button>
             <Button
-              variant="destructive"
+              type="button"
+              variant="ghost"
               size="lg"
               onClick={onClear}
               disabled={disabled}
               aria-label="Clear canvas"
-              className="gap-2 transition-all hover:scale-105"
+              className="h-12 rounded-lg bg-[#F2555D] px-5 text-base font-extrabold text-white shadow-sm hover:bg-[#DC454D] hover:text-white"
             >
-              <Trash2 className="w-5 h-5" />
-              <span className="hidden sm:inline">Clear</span>
+              <Trash2 className="mr-2 h-5 w-5" />
+              Clear
             </Button>
           </div>
         </div>
 
-        {/* Advanced Controls */}
-        <div className="border-t border-border pt-4">
+        <div className="rounded-lg border border-[#E6EAF2] bg-[#FBFDFF] px-4 py-3">
           <button
-            onClick={() => setShowAdvanced(!showAdvanced)}
-            className="flex items-center justify-between w-full text-sm font-semibold text-foreground hover:text-primary transition-colors mb-3"
+            type="button"
+            onClick={() => setShowAdvanced((value) => !value)}
+            className="flex w-full items-center justify-between gap-3 text-left text-sm font-extrabold text-[#7037E8] transition-colors hover:text-[#5F2ED1]"
             aria-expanded={showAdvanced}
           >
             <span className="flex items-center gap-2">
-              <Settings className="w-4 h-4" />
-              Advanced Brush Settings
+              <Settings className="h-5 w-5" />
+              Brush Settings
             </span>
-            {showAdvanced ? (
-              <ChevronUp className="w-4 h-4" />
-            ) : (
-              <ChevronDown className="w-4 h-4" />
-            )}
+            {showAdvanced ? <ChevronUp className="h-5 w-5" /> : <ChevronDown className="h-5 w-5" />}
           </button>
 
           {showAdvanced && (
-            <div className="space-y-4">
-              {/* Brush Presets */}
-              <div>
-                <span className="text-xs text-muted-foreground mb-2 block">Brush Presets</span>
-                <div className="flex gap-2 flex-wrap">
-                  {BRUSH_PRESETS.map((preset) => (
-                    <Button
-                      key={preset.name}
-                      variant="outline"
-                      size="sm"
-                      onClick={() => applyPreset(preset)}
-                      disabled={disabled}
-                      className="text-xs"
-                    >
-                      {preset.name}
-                    </Button>
-                  ))}
+            <div className="mt-4 space-y-4 border-t border-[#E6EAF2] pt-4">
+              <ColorPalette activeColor={activeColor} onColorChange={onColorChange} />
+
+              <div className="grid gap-4 border-t border-[#E6EAF2] pt-4 lg:grid-cols-[minmax(0,1fr)_260px_260px]">
+                <div>
+                  <p className="mb-2 text-sm font-extrabold text-[#24375F]">Brush presets</p>
+                  <div className="flex flex-wrap gap-2">
+                    {BRUSH_PRESETS.map((preset) => (
+                      <Button
+                        key={preset.name}
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => applyPreset(preset)}
+                        disabled={disabled}
+                        className="h-9 rounded-lg border-[#D7DDEA] bg-white px-3 text-xs font-extrabold text-[#415070] hover:bg-[#F6F1FF] hover:text-[#7037E8]"
+                      >
+                        {preset.name}
+                      </Button>
+                    ))}
+                  </div>
                 </div>
-              </div>
 
-              {/* Brush Opacity */}
-              <div className="flex items-center gap-3">
-                <span className="text-sm font-medium whitespace-nowrap flex-shrink-0 min-w-[80px]">
-                  Opacity:
-                </span>
-                <Slider
-                  value={[brushOpacity]}
-                  onValueChange={(value) => onBrushOpacityChange(value[0])}
-                  min={0}
-                  max={1}
-                  step={0.1}
-                  disabled={disabled}
-                  className="flex-1 min-w-0"
-                  aria-label="Brush opacity"
-                  aria-valuemin={0}
-                  aria-valuemax={1}
-                  aria-valuenow={brushOpacity}
-                />
-                <span className="text-sm font-medium w-12 text-center flex-shrink-0">
-                  {Math.round(brushOpacity * 100)}%
-                </span>
-              </div>
+                <div className="flex items-center gap-3">
+                  <span className="w-16 flex-shrink-0 text-sm font-extrabold text-[#24375F]">
+                    Opacity
+                  </span>
+                  <Slider
+                    value={[brushOpacity]}
+                    onValueChange={(value) => onBrushOpacityChange(value[0])}
+                    min={0}
+                    max={1}
+                    step={0.1}
+                    disabled={disabled}
+                    className="min-w-0 flex-1"
+                    aria-label="Brush opacity"
+                    aria-valuemin={0}
+                    aria-valuemax={1}
+                    aria-valuenow={brushOpacity}
+                  />
+                  <span className="w-10 flex-shrink-0 text-right text-sm font-extrabold text-[#10204A]">
+                    {Math.round(brushOpacity * 100)}%
+                  </span>
+                </div>
 
-              {/* Brush Hardness */}
-              <div className="flex items-center gap-3">
-                <span className="text-sm font-medium whitespace-nowrap flex-shrink-0 min-w-[80px]">
-                  Hardness:
-                </span>
-                <Slider
-                  value={[brushHardness]}
-                  onValueChange={(value) => onBrushHardnessChange(value[0])}
-                  min={0}
-                  max={1}
-                  step={0.1}
-                  disabled={disabled}
-                  className="flex-1 min-w-0"
-                  aria-label="Brush hardness"
-                  aria-valuemin={0}
-                  aria-valuemax={1}
-                  aria-valuenow={brushHardness}
-                />
-                <span className="text-sm font-medium w-12 text-center flex-shrink-0">
-                  {Math.round(brushHardness * 100)}%
-                </span>
+                <div className="flex items-center gap-3">
+                  <span className="w-20 flex-shrink-0 text-sm font-extrabold text-[#24375F]">
+                    Hardness
+                  </span>
+                  <Slider
+                    value={[brushHardness]}
+                    onValueChange={(value) => onBrushHardnessChange(value[0])}
+                    min={0}
+                    max={1}
+                    step={0.1}
+                    disabled={disabled}
+                    className="min-w-0 flex-1"
+                    aria-label="Brush hardness"
+                    aria-valuemin={0}
+                    aria-valuemax={1}
+                    aria-valuenow={brushHardness}
+                  />
+                  <span className="w-10 flex-shrink-0 text-right text-sm font-extrabold text-[#10204A]">
+                    {Math.round(brushHardness * 100)}%
+                  </span>
+                </div>
               </div>
             </div>
           )}
