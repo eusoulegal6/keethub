@@ -727,8 +727,8 @@ export function GameProvider({ children }: { children: ReactNode }) {
       if (!gameState.roomId || !channelRef.current) return;
 
       const { data, error } = await supabase.rpc("submit_paint_guess", {
-        p_room_id: gameState.roomId,
-        p_guess: guess,
+        room_id: gameState.roomId,
+        guess,
       });
       const result = data as any;
       console.log("[SUBMIT_GUESS] guess:", guess, "RPC:", JSON.stringify({ correct: result?.correct, alreadyGuessed: result?.already_guessed, error }));
