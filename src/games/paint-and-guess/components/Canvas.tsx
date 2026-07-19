@@ -1,14 +1,13 @@
-import { useRef, useState, useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Toolbar } from "./Toolbar";
-import { ColorPalette } from "./ColorPalette";
 import { useGame } from "@/games/paint-and-guess";
 import { useCanvasLifecycle } from "./canvas/useCanvasLifecycle";
 import { useCanvasDrawing } from "./canvas/useCanvasDrawing";
 import { useCanvasSync } from "./canvas/useCanvasSync";
+import { Clock, Eye, Pencil, Trophy, Users } from "lucide-react";
 
 const STORAGE_KEY = "paint-and-guess-drawing-preferences";
 
-// Load preferences from localStorage
 const loadPreferences = () => {
   try {
     const saved = localStorage.getItem(STORAGE_KEY);
@@ -23,7 +22,7 @@ const loadPreferences = () => {
       };
     }
   } catch {
-    // Ignore errors
+    // Ignore invalid local preferences.
   }
   return {
     color: "#000000",
@@ -44,33 +43,34 @@ export const Canvas = () => {
   const [brushOpacity, setBrushOpacity] = useState(preferences.opacity);
   const [brushHardness, setBrushHardness] = useState(preferences.hardness);
   const [activeTool, setActiveTool] = useState<"draw" | "erase">(preferences.tool);
+  const [hasCanvasContent, setHasCanvasContent] = useState(false);
   const { gameState, isDrawer, isGameActive, sendDrawingEvent, clearCanvas } = useGame();
   const isReceivingRef = useRef(false);
-  
-  // Persist preferences to localStorage
+
   useEffect(() => {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({
-        color: activeColor,
-        size: brushSize,
-        tool: activeTool,
-        opacity: brushOpacity,
-        hardness: brushHardness,
-      }));
+      localStorage.setItem(
+        STORAGE_KEY,
+        JSON.stringify({
+          color: activeColor,
+          size: brushSize,
+          tool: activeTool,
+          opacity: brushOpacity,
+          hardness: brushHardness,
+        }),
+      );
     } catch (error) {
       console.debug("[Canvas] Failed to save preferences:", error);
     }
   }, [activeColor, brushSize, activeTool, brushOpacity, brushHardness]);
 
-  // Debounce brush size changes
   useEffect(() => {
     const timer = setTimeout(() => {
       setDebouncedBrushSize(brushSize);
     }, 100);
     return () => clearTimeout(timer);
   }, [brushSize]);
-  
-  // Canvas lifecycle management
+
   const { fabricCanvas, isCanvasValid } = useCanvasLifecycle({
     canvasRef,
     containerRef,
@@ -82,8 +82,7 @@ export const Canvas = () => {
     brushHardness,
     activeTool,
   });
-  
-  // Drawing functionality
+
   const { handleUndo, handleClear } = useCanvasDrawing({
     fabricCanvas,
     isDrawer,
@@ -97,8 +96,7 @@ export const Canvas = () => {
     isCanvasValid,
     isReceivingRef,
   });
-  
-  // Synchronization (receiving events, clearing)
+
   useCanvasSync({
     fabricCanvas,
     isDrawer,
@@ -108,19 +106,39 @@ export const Canvas = () => {
     isReceivingRef,
   });
 
+  useEffect(() => {
+    setHasCanvasContent(false);
+  }, [gameState.round.number]);
+
+  useEffect(() => {
+    if (!fabricCanvas) return;
+
+    const updateCanvasContent = () => {
+      setHasCanvasContent(fabricCanvas.getObjects().length > 0);
+    };
+
+    updateCanvasContent();
+    fabricCanvas.on("object:added", updateCanvasContent);
+    fabricCanvas.on("object:removed", updateCanvasContent);
+    fabricCanvas.on("path:created", updateCanvasContent);
+
+    return () => {
+      fabricCanvas.off("object:added", updateCanvasContent);
+      fabricCanvas.off("object:removed", updateCanvasContent);
+      fabricCanvas.off("path:created", updateCanvasContent);
+    };
+  }, [fabricCanvas, gameState.round.number]);
+
   const handleToolChange = (tool: "draw" | "erase") => {
     if (!isDrawer || !isGameActive) return;
     setActiveTool(tool);
   };
 
-  // Keyboard shortcuts
   useEffect(() => {
     if (!isDrawer || !isGameActive) return;
 
     const handleKeyPress = (e: KeyboardEvent) => {
-      // Don't interfere with browser shortcuts or when typing in inputs
       if (e.ctrlKey || e.metaKey || e.altKey) {
-        // Allow Ctrl+U / Cmd+U for undo
         if ((e.ctrlKey || e.metaKey) && e.key === "u" && !e.shiftKey) {
           e.preventDefault();
           if (handleUndo) handleUndo();
@@ -128,13 +146,11 @@ export const Canvas = () => {
         return;
       }
 
-      // Don't trigger shortcuts when typing in inputs
       const target = e.target as HTMLElement;
       if (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable) {
         return;
       }
 
-      // Tool shortcuts
       if (e.key === "b" || e.key === "B") {
         e.preventDefault();
         setActiveTool("draw");
@@ -148,87 +164,90 @@ export const Canvas = () => {
     return () => window.removeEventListener("keydown", handleKeyPress);
   }, [isDrawer, isGameActive, handleUndo]);
 
-  // Show waiting state when game is not active or during round transition
   if (!isGameActive || gameState.phase === "round-ended" || gameState.phase === "game-ended") {
     return (
-      <div className="flex items-center justify-center h-96">
-        <div className="text-center">
-          {gameState.phase === "round-ended" ? (
-            <>
-              <p className="text-lg font-semibold mb-2">Round Complete!</p>
-              <p className="text-muted-foreground">
-                Next round starting soon...
-              </p>
-            </>
-          ) : gameState.phase === "game-ended" ? (
-            <>
-              <p className="text-lg font-semibold mb-2">Game Over!</p>
-              <p className="text-muted-foreground">
-                Start a new game when ready
-              </p>
-            </>
-          ) : (
-            <>
-              <p className="text-lg font-semibold mb-2">Waiting for game to start...</p>
-              <p className="text-muted-foreground">
-                {gameState.players.length < 2
+      <div className="flex h-full min-h-[420px] items-center justify-center rounded-lg border border-[#E6EAF2] bg-white p-8 text-center shadow-[0_14px_36px_rgba(16,32,74,0.08)]">
+        <div className="max-w-sm">
+          <div className="mx-auto mb-5 flex h-20 w-20 items-center justify-center rounded-full bg-[#ECFBFA] text-[#10B8B5]">
+            {gameState.phase === "game-ended" ? (
+              <Trophy className="h-10 w-10" />
+            ) : gameState.phase === "round-ended" ? (
+              <Clock className="h-10 w-10" />
+            ) : (
+              <Users className="h-10 w-10" />
+            )}
+          </div>
+          <p className="text-2xl font-black text-[#10204A]">
+            {gameState.phase === "round-ended"
+              ? "Round Complete!"
+              : gameState.phase === "game-ended"
+                ? "Game Over!"
+                : "Waiting for game to start"}
+          </p>
+          <p className="mt-3 text-base font-medium leading-7 text-[#667085]">
+            {gameState.phase === "round-ended"
+              ? "Next round starting soon..."
+              : gameState.phase === "game-ended"
+                ? "Start a new game when ready"
+                : gameState.players.length < 2
                   ? "Need at least 2 players to start"
-                  : "Click 'Start Game' when ready"}
-              </p>
-            </>
-          )}
+                  : "Click start game when ready"}
+          </p>
         </div>
       </div>
     );
   }
 
   return (
-    <div 
-      ref={containerRef} 
-      className="flex flex-col items-center gap-2 sm:gap-4 md:gap-6 p-2 sm:p-4 md:p-8 h-full w-full min-w-0 max-h-full overflow-hidden"
-      style={{ minHeight: 0 }} // Ensure flex child can shrink
-    >
-      {/* Only show toolbar for drawers during active drawing phase */}
+    <div className="flex h-full min-h-0 w-full flex-col gap-4">
       {isDrawer && gameState.phase === "drawing" && (
-        <div className="w-full min-w-0 max-w-full flex-shrink-0">
-          <Toolbar
-            activeTool={activeTool}
-            brushSize={brushSize}
-            brushOpacity={brushOpacity}
-            brushHardness={brushHardness}
-            onToolChange={handleToolChange}
-            onBrushSizeChange={setBrushSize}
-            onBrushOpacityChange={setBrushOpacity}
-            onBrushHardnessChange={setBrushHardness}
-            onUndo={handleUndo}
-            onClear={() => handleClear(clearCanvas)}
-            disabled={!isGameActive || gameState.phase !== "drawing"}
-          />
-        </div>
+        <Toolbar
+          activeTool={activeTool}
+          activeColor={activeColor}
+          brushSize={brushSize}
+          brushOpacity={brushOpacity}
+          brushHardness={brushHardness}
+          hasCanvasContent={hasCanvasContent}
+          onToolChange={handleToolChange}
+          onColorChange={setActiveColor}
+          onBrushSizeChange={setBrushSize}
+          onBrushOpacityChange={setBrushOpacity}
+          onBrushHardnessChange={setBrushHardness}
+          onUndo={handleUndo}
+          onClear={() => {
+            handleClear(clearCanvas);
+            setHasCanvasContent(false);
+          }}
+          disabled={!isGameActive || gameState.phase !== "drawing"}
+        />
       )}
-      
-      <div className="flex-1 flex items-center justify-center w-full min-h-0 min-w-0 max-h-full overflow-hidden" style={{ minHeight: 0 }}>
-        <div className="rounded-lg sm:rounded-xl md:rounded-2xl shadow-strong overflow-hidden border-2 sm:border-4 border-border bg-canvas-bg relative max-w-full max-h-full">
-          <canvas 
-            ref={canvasRef} 
-            className="max-w-full max-h-full"
-            style={{ display: 'block' }} // Prevent inline spacing
-          />
+
+      <div
+        ref={containerRef}
+        className="min-h-[340px] flex-1 overflow-hidden rounded-lg border border-[#E6EAF2] bg-white p-3 shadow-[0_16px_38px_rgba(16,32,74,0.08)]"
+      >
+        <div className="relative flex h-full w-full items-center justify-center overflow-hidden rounded-lg border-2 border-dashed border-[#D9CCFF] bg-white">
+          <canvas ref={canvasRef} className="max-h-full max-w-full" style={{ display: "block" }} />
+
+          {isDrawer && !hasCanvasContent && (
+            <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+              <div className="flex items-center gap-3 rounded-full bg-white/86 px-5 py-3 text-[#A78BFA]">
+                <span className="text-sm font-black">Start drawing here!</span>
+                <Pencil className="h-6 w-6" />
+              </div>
+            </div>
+          )}
+
           {!isDrawer && (
-            <div className="absolute top-1 sm:top-2 left-1/2 transform -translate-x-1/2 pointer-events-none z-10">
-              <div className="bg-background/90 px-2 sm:px-4 py-1 sm:py-2 rounded-lg border shadow-lg">
-                <p className="text-xs sm:text-sm font-semibold">Watch and guess the word!</p>
+            <div className="pointer-events-none absolute left-1/2 top-3 z-10 -translate-x-1/2">
+              <div className="flex items-center gap-2 rounded-full border border-[#B7ECEA] bg-white/92 px-4 py-2 text-sm font-extrabold text-[#087E7D] shadow-sm">
+                <Eye className="h-4 w-4" />
+                Watch and guess the word
               </div>
             </div>
           )}
         </div>
       </div>
-
-      {isDrawer && gameState.phase === "drawing" && (
-        <div className="w-full min-w-0 max-w-full flex-shrink-0">
-          <ColorPalette activeColor={activeColor} onColorChange={setActiveColor} />
-        </div>
-      )}
     </div>
   );
 };

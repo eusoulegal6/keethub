@@ -112,7 +112,7 @@ export default function Room({ onBack }: { onBack: () => void }) {
 
   if (!gameState.roomId) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
+      <div className="flex min-h-[calc(100vh-4rem)] items-center justify-center bg-[#FBFDFF]">
         <Card className="p-6">
           <p>Loading room...</p>
         </Card>
@@ -121,7 +121,7 @@ export default function Room({ onBack }: { onBack: () => void }) {
   }
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-[calc(100vh-4rem)] bg-[#FBFDFF] text-[#10204A]">
       <GameHeader />
 
       {/* Round Summary Overlay */}

@@ -49,22 +49,22 @@ export function useCanvasLifecycle({
       const isMobile = window.innerWidth <= 768;
       const isSmallMobile = window.innerWidth <= 480;
       return {
-        width: isSmallMobile 
-          ? Math.min(window.innerWidth - 32, 320) 
-          : isMobile 
-          ? Math.min(window.innerWidth - 40, 400) 
-          : 800,
+        width: isSmallMobile
+          ? Math.min(window.innerWidth - 32, 320)
+          : isMobile
+            ? Math.min(window.innerWidth - 40, 400)
+            : 800,
         height: isSmallMobile ? 240 : isMobile ? 300 : 600,
       };
     }
 
     const container = containerRef.current;
     const containerRect = container.getBoundingClientRect();
-    
+
     // Get actual container dimensions (handle zero/negative values)
     const containerWidth = Math.max(containerRect.width, 0);
     const containerHeight = Math.max(containerRect.height, 0);
-    
+
     if (containerWidth === 0 || containerHeight === 0) {
       // Fallback if container not measured yet
       const isMobile = window.innerWidth <= 768;
@@ -73,48 +73,43 @@ export function useCanvasLifecycle({
         height: isMobile ? 300 : 600,
       };
     }
-    
-    // Account for toolbar and color palette space
-    // Mobile: smaller UI elements
-    // Note: Toolbar is only shown for drawers, so guessers need minimal space
+
+    // The measured container is the drawing panel itself. Leave room only for
+    // panel padding and the non-canvas overlay chrome.
     const isMobile = containerWidth <= 768;
     const isSmallMobile = containerWidth <= 480;
-    
-    const verticalSpaceForUI = isSmallMobile 
-      ? (isDrawer ? 200 : 20)  // Guessers only need padding
-      : isMobile 
-      ? (isDrawer ? 240 : 30)   // Guessers only need padding
-      : (isDrawer ? 280 : 40);  // Guessers only need padding
-    
+
+    const verticalSpaceForUI = isSmallMobile ? 24 : isMobile ? 28 : 32;
+
     const horizontalPadding = isSmallMobile ? 16 : isMobile ? 24 : 32;
-    
+
     const availableWidth = containerWidth - horizontalPadding;
     const availableHeight = containerHeight - verticalSpaceForUI;
-    
+
     // Target aspect ratio (4:3 for drawing canvas)
     const targetAspectRatio = 4 / 3;
-    
+
     // Calculate dimensions that fit within available space
     let width = availableWidth;
     let height = width / targetAspectRatio;
-    
+
     // If height exceeds available space, scale down based on height
     if (height > availableHeight) {
       height = Math.max(availableHeight, 0);
       width = height * targetAspectRatio;
     }
-    
+
     // Ensure minimum sizes (smaller for mobile)
     const minWidth = isSmallMobile ? 250 : isMobile ? 280 : 300;
     const minHeight = isSmallMobile ? 188 : isMobile ? 210 : 225;
-    
+
     width = Math.max(width, minWidth);
     height = Math.max(height, minHeight);
-    
+
     // Ensure we don't exceed available space
     width = Math.min(width, availableWidth);
     height = Math.min(height, availableHeight);
-    
+
     return {
       width: Math.floor(width),
       height: Math.floor(height),
@@ -131,7 +126,7 @@ export function useCanvasLifecycle({
       if (!lowerCanvasEl) {
         return false;
       }
-      const context = lowerCanvasEl.getContext('2d');
+      const context = lowerCanvasEl.getContext("2d");
       return !!context;
     } catch (error) {
       return false;
@@ -164,7 +159,7 @@ export function useCanvasLifecycle({
     canvas.freeDrawingBrush = new PencilBrush(canvas);
     canvas.freeDrawingBrush.color = activeColor;
     canvas.freeDrawingBrush.width = activeTool === "erase" ? brushSize * 2 : brushSize;
-    
+
     // Set brush opacity (Fabric.js uses shadowBlur and shadowColor for soft edges)
     // For opacity, we'll need to handle it in the drawing context
     // For hardness, we use shadowBlur (0 = hard, higher = soft)
@@ -183,14 +178,14 @@ export function useCanvasLifecycle({
     // Disable all interactions for guessers
     if (!isDrawer) {
       canvas.selection = false;
-      canvas.defaultCursor = 'default';
-      canvas.hoverCursor = 'default';
-      canvas.moveCursor = 'default';
+      canvas.defaultCursor = "default";
+      canvas.hoverCursor = "default";
+      canvas.moveCursor = "default";
       canvas.skipTargetFind = true;
     }
 
     setFabricCanvas(canvas);
-    
+
     // Verify it's ready - Fabric.js should have lowerCanvasEl ready immediately
     // but we'll check in the next frame to be safe
     // Use a more robust check that doesn't spam warnings
@@ -257,7 +252,7 @@ export function useCanvasLifecycle({
 
     // Window resize fallback (with debouncing)
     window.addEventListener("resize", handleResize);
-    
+
     // Also listen for orientation changes on mobile
     const handleOrientationChange = () => {
       // Wait for orientation change to complete
@@ -270,7 +265,7 @@ export function useCanvasLifecycle({
         }
       }, 300);
     };
-    
+
     window.addEventListener("orientationchange", handleOrientationChange);
 
     return () => {
@@ -283,9 +278,9 @@ export function useCanvasLifecycle({
       window.removeEventListener("resize", handleResize);
       window.removeEventListener("orientationchange", handleOrientationChange);
       isDisposedRef.current = true;
-      
+
       setFabricCanvas(null);
-      
+
       try {
         if (canvas && (canvas as any).lowerCanvasEl) {
           canvas.dispose();
@@ -307,17 +302,28 @@ export function useCanvasLifecycle({
     } else {
       fabricCanvas.freeDrawingBrush.color = activeColor;
       fabricCanvas.freeDrawingBrush.width = brushSize;
-      
+
       // Apply hardness using shadowBlur
       const shadowBlur = brushHardness < 1 ? (1 - brushHardness) * brushSize * 2 : 0;
-      (fabricCanvas.freeDrawingBrush as any).shadow = shadowBlur > 0 ? {
-        blur: shadowBlur,
-        offsetX: 0,
-        offsetY: 0,
-        color: activeColor,
-      } : null;
+      (fabricCanvas.freeDrawingBrush as any).shadow =
+        shadowBlur > 0
+          ? {
+              blur: shadowBlur,
+              offsetX: 0,
+              offsetY: 0,
+              color: activeColor,
+            }
+          : null;
     }
-  }, [fabricCanvas, isCanvasValid, activeColor, brushSize, brushOpacity, brushHardness, activeTool]);
+  }, [
+    fabricCanvas,
+    isCanvasValid,
+    activeColor,
+    brushSize,
+    brushOpacity,
+    brushHardness,
+    activeTool,
+  ]);
 
   return {
     fabricCanvas,
@@ -325,4 +331,3 @@ export function useCanvasLifecycle({
     isCanvasValid,
   };
 }
-

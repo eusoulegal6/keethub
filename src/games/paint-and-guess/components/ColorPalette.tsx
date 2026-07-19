@@ -1,14 +1,11 @@
-import { useState, useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Check, Palette, ChevronDown, ChevronUp } from "lucide-react";
+import { Check, ChevronDown, ChevronUp, Palette, Pipette } from "lucide-react";
 import { HexColorPicker } from "react-colorful";
 import { colord } from "colord";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { cn } from "@/lib/utils";
 
 interface ColorPaletteProps {
   activeColor: string;
@@ -16,35 +13,29 @@ interface ColorPaletteProps {
 }
 
 const PRESET_COLORS = [
-  "#000000", // Black
-  "#FFFFFF", // White
-  "#EF4444", // Red
-  "#F97316", // Orange
-  "#EAB308", // Yellow
-  "#22C55E", // Green
-  "#06B6D4", // Cyan
-  "#3B82F6", // Blue
-  "#8B5CF6", // Purple
-  "#EC4899", // Pink
-  "#A855F7", // Violet
-  "#F59E0B", // Amber
+  "#000000",
+  "#FFFFFF",
+  "#EF4444",
+  "#F97316",
+  "#EAB308",
+  "#22C55E",
+  "#06B6D4",
+  "#3B82F6",
+  "#8B5CF6",
+  "#EC4899",
+  "#A855F7",
+  "#F59E0B",
 ] as const;
 
 const RECENT_COLORS_MAX = 6;
 const STORAGE_KEY = "paint-and-guess-recent-colors";
 
-// Validate hex color format
-const isValidHexColor = (value: string): boolean => {
-  return /^#[0-9A-F]{6}$/i.test(value);
-};
+const isValidHexColor = (value: string): boolean => /^#[0-9A-F]{6}$/i.test(value);
 
 export const ColorPalette = ({ activeColor, onColorChange }: ColorPaletteProps) => {
-  // Sync customColor with activeColor prop
   const [customColor, setCustomColor] = useState(activeColor);
   const [showAdvancedPicker, setShowAdvancedPicker] = useState(false);
   const [showHarmonies, setShowHarmonies] = useState(false);
-  
-  // Load recent colors from localStorage
   const [recentColors, setRecentColors] = useState<string[]>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
@@ -54,32 +45,26 @@ export const ColorPalette = ({ activeColor, onColorChange }: ColorPaletteProps) 
     }
   });
 
-  // Sync customColor when activeColor prop changes
   useEffect(() => {
     setCustomColor(activeColor);
   }, [activeColor]);
 
-  // Generate color harmonies using colord
   const colorHarmonies = useMemo(() => {
     try {
       const color = colord(activeColor);
-      return {
-        complementary: color.rotate(180).toHex(),
-        triadic1: color.rotate(120).toHex(),
-        triadic2: color.rotate(240).toHex(),
-        analogous1: color.rotate(-30).toHex(),
-        analogous2: color.rotate(30).toHex(),
-        lighter: color.lighten(0.2).toHex(),
-        darker: color.darken(0.2).toHex(),
-        saturated: color.saturate(0.2).toHex(),
-        desaturated: color.desaturate(0.2).toHex(),
-      };
+      return [
+        { label: "Comp", color: color.rotate(180).toHex() },
+        { label: "Triad", color: color.rotate(120).toHex() },
+        { label: "Triad", color: color.rotate(240).toHex() },
+        { label: "Light", color: color.lighten(0.2).toHex() },
+        { label: "Dark", color: color.darken(0.2).toHex() },
+        { label: "Soft", color: color.desaturate(0.2).toHex() },
+      ];
     } catch {
-      return null;
+      return [];
     }
   }, [activeColor]);
 
-  // Persist recent colors to localStorage
   useEffect(() => {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(recentColors));
@@ -88,319 +73,204 @@ export const ColorPalette = ({ activeColor, onColorChange }: ColorPaletteProps) 
     }
   }, [recentColors]);
 
-  const handleColorSelect = (color: string) => {
-    onColorChange(color);
-    setCustomColor(color);
-    
-    // Add to recent colors (remove if already exists, then add to front)
+  const rememberColor = (color: string) => {
     setRecentColors((prev) => {
-      const filtered = prev.filter((c) => c !== color);
+      const filtered = prev.filter((recentColor) => recentColor !== color);
       return [color, ...filtered].slice(0, RECENT_COLORS_MAX);
     });
   };
 
-  const handleCustomColorChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const color = e.target.value;
+  const handleColorSelect = (color: string) => {
+    onColorChange(color);
     setCustomColor(color);
-    
-    // Only update active color if valid
-    if (isValidHexColor(color)) {
-      onColorChange(color);
-      // Add to recent colors without calling handleColorSelect (avoid double call)
-      setRecentColors((prev) => {
-        const filtered = prev.filter((c) => c !== color);
-        return [color, ...filtered].slice(0, RECENT_COLORS_MAX);
-      });
+    rememberColor(color);
+  };
+
+  const handleHexChange = (value: string) => {
+    const nextValue = value.toUpperCase();
+    if (nextValue !== "" && !/^#[0-9A-F]{0,6}$/i.test(nextValue)) return;
+
+    setCustomColor(nextValue);
+    if (isValidHexColor(nextValue)) {
+      onColorChange(nextValue);
+      rememberColor(nextValue);
     }
   };
 
   return (
-    <div className="bg-toolbar-bg rounded-2xl p-4 md:p-6 shadow-medium border border-border">
-      <div className="space-y-4">
-        {/* Preset Colors */}
-        <div>
-          <h3 className="text-sm font-semibold mb-3 text-foreground">Colors</h3>
-          <div className="grid grid-cols-6 md:grid-cols-12 gap-2">
-            {PRESET_COLORS.map((color) => (
-              <button
-                key={color}
-                onClick={() => handleColorSelect(color)}
-                aria-label={`Select color ${color}`}
-                aria-pressed={activeColor === color}
-                className="relative w-full aspect-square rounded-xl transition-all hover:scale-110 active:scale-95 shadow-soft focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
-                style={{
-                  backgroundColor: color,
-                  border: color === "#FFFFFF" ? "2px solid #e5e7eb" : "none",
-                }}
-              >
-                {activeColor === color && (
-                  <div className="absolute inset-0 flex items-center justify-center">
-                    <Check
-                      className="w-5 h-5"
-                      style={{ color: color === "#FFFFFF" || color === "#EAB308" ? "#000000" : "#FFFFFF" }}
-                    />
-                  </div>
-                )}
-              </button>
-            ))}
-          </div>
+    <div className="space-y-4">
+      <div>
+        <p className="mb-3 text-sm font-extrabold text-[#24375F]">Colors</p>
+        <div className="flex flex-wrap gap-3">
+          {PRESET_COLORS.map((color) => (
+            <ColorSwatch
+              key={color}
+              color={color}
+              label={color}
+              onClick={() => handleColorSelect(color)}
+              isActive={activeColor.toUpperCase() === color}
+            />
+          ))}
         </div>
+      </div>
 
-        {/* Recent Colors */}
+      <div className="grid gap-4 lg:grid-cols-[minmax(160px,auto)_minmax(280px,1fr)_auto] lg:items-end">
         <div>
-          <h3 className="text-sm font-semibold mb-3 text-foreground">Recent</h3>
+          <p className="mb-3 text-sm font-extrabold text-[#667085]">Recent</p>
           {recentColors.length > 0 ? (
-            <div className="flex gap-2 flex-wrap">
-              {recentColors.map((color, index) => (
-                <button
+            <div className="flex flex-wrap gap-3">
+              {recentColors.slice(0, 3).map((color, index) => (
+                <ColorSwatch
                   key={`${color}-${index}`}
+                  color={color}
+                  label={`Recent ${color}`}
+                  size="sm"
                   onClick={() => handleColorSelect(color)}
-                  aria-label={`Select recent color ${color}`}
-                  aria-pressed={activeColor === color}
-                  className="relative w-12 h-12 rounded-xl transition-all hover:scale-110 active:scale-95 shadow-soft focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
-                  style={{ backgroundColor: color }}
-                >
-                  {activeColor === color && (
-                    <div className="absolute inset-0 flex items-center justify-center">
-                      <Check className="w-4 h-4 text-white" />
-                    </div>
-                  )}
-                </button>
+                  isActive={activeColor.toUpperCase() === color.toUpperCase()}
+                />
               ))}
             </div>
           ) : (
-            <div className="text-sm text-muted-foreground">No recent colors yet</div>
+            <div className="flex h-10 items-center text-sm font-semibold text-[#98A2B3]">
+              No recent colors yet
+            </div>
           )}
         </div>
 
-        {/* Color Harmonies */}
-        {colorHarmonies && (
-          <div>
-            <button
-              onClick={() => setShowHarmonies(!showHarmonies)}
-              className="flex items-center justify-between w-full text-sm font-semibold mb-3 text-foreground hover:text-primary transition-colors"
-              aria-expanded={showHarmonies}
-            >
-              <span className="flex items-center gap-2">
-                <Palette className="w-4 h-4" />
-                Color Harmonies
-              </span>
-              {showHarmonies ? (
-                <ChevronUp className="w-4 h-4" />
-              ) : (
-                <ChevronDown className="w-4 h-4" />
-              )}
-            </button>
-            {showHarmonies && (
-              <div className="space-y-3">
-                <div>
-                  <span className="text-xs text-muted-foreground mb-2 block">Complementary & Triadic</span>
-                  <div className="flex gap-2 flex-wrap">
-                    <ColorSwatch
-                      color={colorHarmonies.complementary}
-                      label="Complementary"
-                      onClick={() => handleColorSelect(colorHarmonies.complementary)}
-                      isActive={activeColor === colorHarmonies.complementary}
-                    />
-                    <ColorSwatch
-                      color={colorHarmonies.triadic1}
-                      label="Triadic 1"
-                      onClick={() => handleColorSelect(colorHarmonies.triadic1)}
-                      isActive={activeColor === colorHarmonies.triadic1}
-                    />
-                    <ColorSwatch
-                      color={colorHarmonies.triadic2}
-                      label="Triadic 2"
-                      onClick={() => handleColorSelect(colorHarmonies.triadic2)}
-                      isActive={activeColor === colorHarmonies.triadic2}
-                    />
-                  </div>
-                </div>
-                <div>
-                  <span className="text-xs text-muted-foreground mb-2 block">Analogous</span>
-                  <div className="flex gap-2 flex-wrap">
-                    <ColorSwatch
-                      color={colorHarmonies.analogous1}
-                      label="Analogous 1"
-                      onClick={() => handleColorSelect(colorHarmonies.analogous1)}
-                      isActive={activeColor === colorHarmonies.analogous1}
-                    />
-                    <ColorSwatch
-                      color={colorHarmonies.analogous2}
-                      label="Analogous 2"
-                      onClick={() => handleColorSelect(colorHarmonies.analogous2)}
-                      isActive={activeColor === colorHarmonies.analogous2}
-                    />
-                  </div>
-                </div>
-                <div>
-                  <span className="text-xs text-muted-foreground mb-2 block">Variations</span>
-                  <div className="flex gap-2 flex-wrap">
-                    <ColorSwatch
-                      color={colorHarmonies.lighter}
-                      label="Lighter"
-                      onClick={() => handleColorSelect(colorHarmonies.lighter)}
-                      isActive={activeColor === colorHarmonies.lighter}
-                    />
-                    <ColorSwatch
-                      color={colorHarmonies.darker}
-                      label="Darker"
-                      onClick={() => handleColorSelect(colorHarmonies.darker)}
-                      isActive={activeColor === colorHarmonies.darker}
-                    />
-                    <ColorSwatch
-                      color={colorHarmonies.saturated}
-                      label="More Saturated"
-                      onClick={() => handleColorSelect(colorHarmonies.saturated)}
-                      isActive={activeColor === colorHarmonies.saturated}
-                    />
-                    <ColorSwatch
-                      color={colorHarmonies.desaturated}
-                      label="Less Saturated"
-                      onClick={() => handleColorSelect(colorHarmonies.desaturated)}
-                      isActive={activeColor === colorHarmonies.desaturated}
-                    />
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Custom Color Picker */}
         <div>
-          <h3 className="text-sm font-semibold mb-3 text-foreground">Custom Color</h3>
-          <div className="space-y-3">
-            <div className="flex gap-3 items-center">
-              <Popover open={showAdvancedPicker} onOpenChange={setShowAdvancedPicker}>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    className="w-20 h-12 p-0 border-2 rounded-xl cursor-pointer"
-                    style={{ backgroundColor: customColor }}
-                    aria-label="Open advanced color picker"
-                  >
-                    <span className="sr-only">Color preview</span>
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-4" align="start">
-                  <div className="space-y-3">
-                    <HexColorPicker
-                      color={customColor}
-                      onChange={(color: string) => {
-                        setCustomColor(color);
-                        if (isValidHexColor(color)) {
-                          onColorChange(color);
-                          setRecentColors((prev) => {
-                            const filtered = prev.filter((c) => c !== color);
-                            return [color, ...filtered].slice(0, RECENT_COLORS_MAX);
-                          });
-                        }
-                      }}
-                    />
-                    <div className="flex gap-2">
-                      <Input
-                        type="text"
-                        value={customColor.toUpperCase()}
-                        onChange={(e) => {
-                          const value = e.target.value.toUpperCase();
-                          if (value === "" || /^#[0-9A-F]{0,6}$/i.test(value)) {
-                            setCustomColor(value);
-                            if (isValidHexColor(value)) {
-                              onColorChange(value);
-                              setRecentColors((prev) => {
-                                const filtered = prev.filter((c) => c !== value);
-                                return [value, ...filtered].slice(0, RECENT_COLORS_MAX);
-                              });
-                            }
-                          }
-                        }}
-                        className="font-mono uppercase flex-1"
-                        placeholder="#000000"
-                        maxLength={7}
-                        aria-label="Custom color hex code"
-                      />
-                    </div>
-                  </div>
-                </PopoverContent>
-              </Popover>
-              <Input
-                type="text"
-                value={customColor.toUpperCase()}
-                onChange={(e) => {
-                  const value = e.target.value.toUpperCase();
-                  // Allow empty or partial hex codes while typing
-                  if (value === "" || /^#[0-9A-F]{0,6}$/i.test(value)) {
-                    setCustomColor(value);
-                    // Only apply if valid complete hex color
-                    if (isValidHexColor(value)) {
-                      onColorChange(value);
-                      // Add to recent colors without calling handleColorSelect (avoid double call)
-                      setRecentColors((prev) => {
-                        const filtered = prev.filter((c) => c !== value);
-                        return [value, ...filtered].slice(0, RECENT_COLORS_MAX);
-                      });
-                    }
-                  }
-                }}
-                className="font-mono uppercase flex-1"
-                placeholder="#000000"
-                maxLength={7}
-                aria-label="Custom color hex code"
-              />
-            </div>
-            <div className="text-xs text-muted-foreground">
-              Click the color box to open advanced picker
-            </div>
+          <p className="mb-3 text-sm font-extrabold text-[#667085]">Custom Color</p>
+          <div className="flex min-w-0 items-center gap-3">
+            <Popover open={showAdvancedPicker} onOpenChange={setShowAdvancedPicker}>
+              <PopoverTrigger asChild>
+                <button
+                  type="button"
+                  className="h-11 w-11 flex-shrink-0 rounded-lg border-2 border-[#E6EAF2] shadow-sm focus:outline-none focus:ring-2 focus:ring-[#10B8B5] focus:ring-offset-2"
+                  style={{
+                    backgroundColor: isValidHexColor(customColor) ? customColor : activeColor,
+                  }}
+                  aria-label="Open advanced color picker"
+                >
+                  <span className="sr-only">Color preview</span>
+                </button>
+              </PopoverTrigger>
+              <PopoverContent
+                className="w-auto rounded-lg border-[#E6EAF2] bg-white p-4"
+                align="start"
+              >
+                <div className="space-y-3">
+                  <HexColorPicker
+                    color={isValidHexColor(customColor) ? customColor : activeColor}
+                    onChange={(color: string) => {
+                      setCustomColor(color.toUpperCase());
+                      onColorChange(color);
+                      rememberColor(color);
+                    }}
+                  />
+                  <Input
+                    type="text"
+                    value={customColor.toUpperCase()}
+                    onChange={(e) => handleHexChange(e.target.value)}
+                    className="h-10 font-mono uppercase"
+                    placeholder="#000000"
+                    maxLength={7}
+                    aria-label="Custom color hex code"
+                  />
+                </div>
+              </PopoverContent>
+            </Popover>
+
+            <Input
+              type="text"
+              value={customColor.toUpperCase()}
+              onChange={(e) => handleHexChange(e.target.value)}
+              className="h-11 min-w-0 flex-1 rounded-lg border-[#DDE4EF] bg-white font-mono uppercase text-[#24375F] focus-visible:ring-[#10B8B5]"
+              placeholder="#000000"
+              maxLength={7}
+              aria-label="Custom color hex code"
+            />
+            <Pipette className="h-5 w-5 flex-shrink-0 text-[#7037E8]" />
           </div>
         </div>
 
-        {/* Active Color Preview */}
-        <div className="flex items-center gap-3 pt-2 border-t border-border">
-          <span className="text-sm font-medium text-muted-foreground">Active:</span>
-          <div
-            className="w-10 h-10 rounded-full shadow-medium border-2 border-border"
-            style={{ backgroundColor: activeColor }}
-          />
-          <span className="font-mono text-sm font-medium">{activeColor.toUpperCase()}</span>
-        </div>
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() => setShowHarmonies((value) => !value)}
+          className="h-11 rounded-lg border-[#D7DDEA] bg-white px-4 text-sm font-extrabold text-[#7037E8] hover:bg-[#F6F1FF] hover:text-[#7037E8]"
+          aria-expanded={showHarmonies}
+        >
+          <Palette className="mr-2 h-4 w-4" />
+          Color Harmonies
+          {showHarmonies ? (
+            <ChevronUp className="ml-2 h-4 w-4" />
+          ) : (
+            <ChevronDown className="ml-2 h-4 w-4" />
+          )}
+        </Button>
       </div>
+
+      {showHarmonies && colorHarmonies.length > 0 && (
+        <div className="rounded-lg border border-[#E6EAF2] bg-white p-3">
+          <div className="flex flex-wrap gap-3">
+            {colorHarmonies.map((harmony) => (
+              <ColorSwatch
+                key={`${harmony.label}-${harmony.color}`}
+                color={harmony.color}
+                label={harmony.label}
+                size="sm"
+                onClick={() => handleColorSelect(harmony.color)}
+                isActive={activeColor.toUpperCase() === harmony.color.toUpperCase()}
+                showLabel
+              />
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 };
 
-// Helper component for color swatches with labels
 interface ColorSwatchProps {
   color: string;
   label: string;
   onClick: () => void;
   isActive: boolean;
+  size?: "sm" | "md";
+  showLabel?: boolean;
 }
 
-const ColorSwatch = ({ color, label, onClick, isActive }: ColorSwatchProps) => {
+const ColorSwatch = ({
+  color,
+  label,
+  onClick,
+  isActive,
+  size = "md",
+  showLabel = false,
+}: ColorSwatchProps) => {
+  const isLightColor = color.toUpperCase() === "#FFFFFF" || color.toUpperCase() === "#EAB308";
+
   return (
     <button
+      type="button"
       onClick={onClick}
       aria-label={`Select ${label} color ${color}`}
       aria-pressed={isActive}
-      className="relative group flex flex-col items-center gap-1 transition-all hover:scale-110 active:scale-95 focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 rounded-lg p-1"
+      className="group flex flex-col items-center gap-1 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#10B8B5] focus:ring-offset-2"
     >
-      <div
-        className="w-10 h-10 rounded-lg shadow-soft border-2 transition-all"
-        style={{
-          backgroundColor: color,
-          borderColor: isActive ? "var(--primary)" : "transparent",
-        }}
+      <span
+        className={cn(
+          "relative flex items-center justify-center rounded-full border-2 shadow-[0_7px_14px_rgba(16,32,74,0.10)] transition-transform group-hover:scale-105",
+          size === "sm" ? "h-9 w-9" : "h-12 w-12",
+          color.toUpperCase() === "#FFFFFF" ? "border-[#E6EAF2]" : "border-transparent",
+          isActive && "ring-2 ring-[#7037E8] ring-offset-2",
+        )}
+        style={{ backgroundColor: color }}
       >
         {isActive && (
-          <div className="absolute inset-0 flex items-center justify-center">
-            <Check className="w-4 h-4 text-white drop-shadow-md" />
-          </div>
+          <Check className={cn("h-5 w-5", isLightColor ? "text-[#10204A]" : "text-white")} />
         )}
-      </div>
-      <span className="text-xs text-muted-foreground group-hover:text-foreground transition-colors">
-        {label}
       </span>
+      {showLabel && <span className="text-xs font-bold text-[#667085]">{label}</span>}
     </button>
   );
 };
