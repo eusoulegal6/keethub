@@ -7,7 +7,6 @@ import {
   BookOpen,
   ChevronRight,
   ClipboardList,
-  Flame,
   Gamepad2,
   Globe2,
   GraduationCap,
@@ -17,7 +16,6 @@ import {
   Mic,
   Music,
   Puzzle,
-  ScrollText,
   ShieldCheck,
   Sparkles,
   Star,
@@ -27,10 +25,12 @@ import {
   type LucideIcon,
 } from "lucide-react";
 
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { getGlobalLeaderboard, type LeaderboardEntry } from "@/lib/scores.functions";
+import { useAuth } from "@/hooks/use-auth";
+import { getDiceBearAvatarUrlFromSeed } from "@/lib/avatar/dicebear/api";
 import { cn } from "@/lib/utils";
 
 type RoutePath = "/auth" | "/hub" | "/hub/leaderboard";
@@ -221,6 +221,8 @@ const socialLinks = [
 ];
 
 export function PrimKeetLanding() {
+  const { user, isAuthenticated } = useAuth();
+
   return (
     <div className="min-h-screen overflow-x-hidden bg-[#FFFDFB] text-[#10204A]">
       <LandingMotionStyles />
@@ -229,9 +231,9 @@ export function PrimKeetLanding() {
       <div className="pointer-events-none absolute right-0 top-[330px] h-32 w-64 rounded-l-full bg-[#DFF2FF]" />
 
       <div className="relative z-10">
-        <PrimKeetNavbar />
+        <PrimKeetNavbar isAuthenticated={isAuthenticated} user={user} />
         <main>
-          <HeroSection />
+          <HeroSection isAuthenticated={isAuthenticated} user={user} />
           <GameCategoryGrid />
           <section className="mx-auto grid w-full max-w-[1500px] gap-5 px-5 pb-6 md:px-10 lg:grid-cols-[1.08fr_0.92fr]">
             <HowItWorks />
@@ -245,7 +247,16 @@ export function PrimKeetLanding() {
   );
 }
 
-function PrimKeetNavbar() {
+function PrimKeetNavbar({
+  isAuthenticated,
+  user,
+}: {
+  isAuthenticated: boolean;
+  user: { id: string; email?: string | null | undefined } | null;
+}) {
+  const username = user?.email?.split("@")[0] ?? "Player";
+  const avatarUrl = user ? getDiceBearAvatarUrlFromSeed(user.id) : null;
+
   return (
     <header className="mx-auto flex w-full max-w-[1780px] px-4 pt-5 md:px-8">
       <nav
@@ -266,16 +277,34 @@ function PrimKeetNavbar() {
         </div>
 
         <div className="flex items-center gap-2 sm:gap-3">
-          <Button
-            asChild
-            variant="outline"
-            className="hidden h-12 rounded-full border-[#E7ECF5] bg-white px-6 font-extrabold text-[#10204A] shadow-[0_10px_24px_rgba(49,64,106,0.08)] hover:bg-[#F8FAFF] sm:inline-flex"
-          >
-            <Link to="/auth">Sign in</Link>
-          </Button>
+          {isAuthenticated ? (
+            <Button
+              asChild
+              variant="outline"
+              className="h-12 rounded-full border-[#E7ECF5] bg-white px-4 font-extrabold text-[#10204A] shadow-[0_10px_24px_rgba(49,64,106,0.08)] hover:bg-[#F8FAFF]"
+            >
+              <Link to="/hub/profile" className="flex items-center gap-2">
+                <Avatar className="h-7 w-7 border-2 border-white">
+                  {avatarUrl && <AvatarImage src={avatarUrl} alt={username} />}
+                  <AvatarFallback className="bg-[linear-gradient(135deg,#FFF3F8,#DDFBFF)] text-xs font-black text-[#10204A]">
+                    {username.charAt(0).toUpperCase()}
+                  </AvatarFallback>
+                </Avatar>
+                <span className="max-w-[120px] truncate">{username}</span>
+              </Link>
+            </Button>
+          ) : (
+            <Button
+              asChild
+              variant="outline"
+              className="hidden h-12 rounded-full border-[#E7ECF5] bg-white px-6 font-extrabold text-[#10204A] shadow-[0_10px_24px_rgba(49,64,106,0.08)] hover:bg-[#F8FAFF] sm:inline-flex"
+            >
+              <Link to="/auth">Sign in</Link>
+            </Button>
+          )}
           <Button asChild className={cn(primaryButtonClass, "px-4 sm:px-6")}>
             <Link to="/hub">
-              <span className="hidden sm:inline">Start playing</span>
+              <span className="hidden sm:inline">{isAuthenticated ? "My Hub" : "Start playing"}</span>
               <span className="sm:hidden">Play</span>
               <Star className="fill-white" aria-hidden="true" />
             </Link>
@@ -290,12 +319,21 @@ function PrimKeetNavbar() {
               {navItems.map((item) => (
                 <MobileNavItem key={item.label} item={item} />
               ))}
-              <Link
-                to="/auth"
-                className="mt-1 flex min-h-11 items-center rounded-lg px-3 text-sm font-extrabold text-[#10204A] transition hover:bg-[#F8FAFF] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#11BFC4]"
-              >
-                Sign in
-              </Link>
+              {isAuthenticated ? (
+                <Link
+                  to="/hub/profile"
+                  className="mt-1 flex min-h-11 items-center rounded-lg px-3 text-sm font-extrabold text-[#10204A] transition hover:bg-[#F8FAFF] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#11BFC4]"
+                >
+                  {username}
+                </Link>
+              ) : (
+                <Link
+                  to="/auth"
+                  className="mt-1 flex min-h-11 items-center rounded-lg px-3 text-sm font-extrabold text-[#10204A] transition hover:bg-[#F8FAFF] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#11BFC4]"
+                >
+                  Sign in
+                </Link>
+              )}
             </div>
           </details>
         </div>
@@ -348,7 +386,13 @@ function MobileNavItem({ item }: { item: NavItem }) {
   );
 }
 
-function HeroSection() {
+function HeroSection({
+  isAuthenticated,
+  user,
+}: {
+  isAuthenticated: boolean;
+  user: { id: string; email?: string | null | undefined } | null;
+}) {
   return (
     <section className="mx-auto grid w-full max-w-[1650px] items-center gap-10 px-5 pb-8 pt-12 md:px-10 md:pb-10 lg:grid-cols-[0.86fr_1.14fr] lg:gap-12 lg:pt-16">
       <div className="pk-reveal relative max-w-[680px]">
@@ -383,7 +427,7 @@ function HeroSection() {
       </div>
 
       <div className="pk-reveal pk-delay-1">
-        <StudentDashboardPreview />
+        <StudentDashboardPreview isAuthenticated={isAuthenticated} user={user} />
       </div>
     </section>
   );
@@ -401,7 +445,55 @@ function DecorativeMarks() {
   );
 }
 
-function StudentDashboardPreview() {
+function StudentDashboardPreview({
+  isAuthenticated,
+  user,
+}: {
+  isAuthenticated: boolean;
+  user: { id: string; email?: string | null | undefined } | null;
+}) {
+  const username = user?.email?.split("@")[0] ?? "Player";
+  const avatarUrl = user ? getDiceBearAvatarUrlFromSeed(user.id) : null;
+
+  // Pull real score from leaderboard for this user
+  const { data: leaderboardRows = [] } = useQuery({
+    queryKey: ["landing-user-score", user?.id],
+    queryFn: () => getGlobalLeaderboard(),
+    enabled: isAuthenticated && !!user?.id,
+    staleTime: 60_000,
+  });
+  const userScore = isAuthenticated && user
+    ? leaderboardRows
+        .filter((r) => r.user_id === user.id)
+        .reduce((sum, r) => sum + r.score, 0)
+    : null;
+
+  if (!isAuthenticated) {
+    return (
+      <Card className="relative overflow-hidden rounded-lg border-white/80 bg-white/[0.88] p-4 text-[#10204A] shadow-[0_24px_70px_rgba(76,141,255,0.2)] backdrop-blur sm:p-5 lg:p-7">
+        <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(140deg,#F2F8FF_0%,#FFFFFF_45%,#FFF3F8_100%)]" />
+        <div className="relative flex flex-col items-center justify-center py-10 text-center">
+          <div className="mb-4 grid h-20 w-20 place-items-center rounded-full bg-[#ECFDFF]">
+            <Sparkles className="h-10 w-10 fill-[#FFD43B] text-[#FFD43B]" aria-hidden="true" />
+          </div>
+          <h2 className="text-2xl font-black leading-tight text-[#10204A]">
+            Ready to start learning?
+          </h2>
+          <p className="mt-2 max-w-sm text-sm font-semibold text-[#667085]">
+            Sign in to track your progress, earn points, and climb the leaderboard.
+          </p>
+          <Button asChild className={cn(primaryButtonClass, "mt-6")}>
+            <Link to="/auth">
+              Sign in to get started
+              <ArrowRight aria-hidden="true" />
+            </Link>
+          </Button>
+        </div>
+        <ParakeetMascot className="pk-float absolute right-1 top-10 hidden h-28 w-28 xl:block" />
+      </Card>
+    );
+  }
+
   return (
     <Card className="relative overflow-hidden rounded-lg border-white/80 bg-white/[0.88] p-4 text-[#10204A] shadow-[0_24px_70px_rgba(76,141,255,0.2)] backdrop-blur sm:p-5 lg:p-7">
       <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(140deg,#F2F8FF_0%,#FFFFFF_45%,#FFF3F8_100%)]" />
@@ -416,7 +508,7 @@ function StudentDashboardPreview() {
           <div>
             <div className="flex items-center gap-2">
               <h2 className="text-2xl font-black leading-tight text-[#10204A]">
-                Welcome back, Alex!
+                Welcome back, {username}!
               </h2>
               <Sparkles className="h-5 w-5 fill-[#FFD43B] text-[#FFD43B]" aria-hidden="true" />
             </div>
@@ -425,11 +517,22 @@ function StudentDashboardPreview() {
             </p>
           </div>
           <div className="grid grid-cols-3 gap-3">
-            <SummaryTile icon={Flame} value="7" label="Day streak" color="text-[#FF981F]" />
-            <SummaryTile icon={Star} value="2,450" label="Points" color="text-[#FFD43B]" />
+            <SummaryTile
+              icon={Star}
+              value={userScore != null ? formatPoints(userScore) : "--"}
+              label="Points"
+              color="text-[#FFD43B]"
+            />
+            <SummaryTile
+              icon={Gamepad2}
+              value={leaderboardRows.filter((r) => r.user_id === user?.id).length.toString()}
+              label="Scores"
+              color="text-[#11BFC4]"
+            />
             <Avatar className="h-16 w-16 border-4 border-white bg-[#FFEAF3] shadow-[0_10px_28px_rgba(49,64,106,0.14)]">
+              {avatarUrl && <AvatarImage src={avatarUrl} alt={username} />}
               <AvatarFallback className="bg-[linear-gradient(135deg,#FFE0EF,#DDFBFF)] text-xl font-black text-[#10204A]">
-                A
+                {username.charAt(0).toUpperCase()}
               </AvatarFallback>
             </Avatar>
           </div>
@@ -437,7 +540,7 @@ function StudentDashboardPreview() {
 
         <div className="mt-6 grid gap-4 xl:grid-cols-[minmax(0,1fr)_180px]">
           <div className="rounded-lg bg-white/[0.68] p-3 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.9)] sm:p-4">
-            <h3 className="mb-4 text-sm font-black text-[#10204A]">Continue playing</h3>
+            <h3 className="mb-4 text-sm font-black text-[#10204A]">Learning areas</h3>
             <div className="grid grid-cols-2 gap-3 min-[580px]:grid-cols-4">
               {miniGames.map((game) => (
                 <MiniGameCard key={game.title} game={game} />
@@ -445,8 +548,20 @@ function StudentDashboardPreview() {
             </div>
           </div>
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
-            <DailyGoalCard />
-            <ChallengeCard />
+            <Button asChild className="h-full min-h-[100px] rounded-lg border border-[#E8F0FF] bg-[#FFF3F8] p-4 shadow-[0_12px_28px_rgba(49,64,106,0.1)] hover:bg-[#FFE4F0]">
+              <Link to="/hub" className="flex flex-col items-center justify-center gap-2 text-center">
+                <Gamepad2 className="h-7 w-7 text-[#FF3B8D]" aria-hidden="true" />
+                <span className="text-sm font-extrabold text-[#FF3B8D]">Explore games</span>
+                <ArrowRight className="h-4 w-4 text-[#FF3B8D]" aria-hidden="true" />
+              </Link>
+            </Button>
+            <Button asChild className="h-full min-h-[100px] rounded-lg border border-[#E8F0FF] bg-[#F7F3FF] p-4 shadow-[0_12px_28px_rgba(49,64,106,0.1)] hover:bg-[#EDE0FF]">
+              <Link to="/hub/leaderboard" className="flex flex-col items-center justify-center gap-2 text-center">
+                <Trophy className="h-7 w-7 text-[#8B5CF6]" aria-hidden="true" />
+                <span className="text-sm font-extrabold text-[#8B5CF6]">Leaderboard</span>
+                <ArrowRight className="h-4 w-4 text-[#8B5CF6]" aria-hidden="true" />
+              </Link>
+            </Button>
           </div>
         </div>
       </div>
@@ -514,51 +629,6 @@ function MiniGameCard({ game }: { game: MiniGame }) {
         </div>
       </div>
     </article>
-  );
-}
-
-function DailyGoalCard() {
-  return (
-    <aside className="rounded-lg border border-[#E8F0FF] bg-white p-4 shadow-[0_12px_28px_rgba(49,64,106,0.1)]">
-      <p className="text-xs font-black text-[#10204A]">Daily Goal</p>
-      <div className="mt-3 flex items-center gap-3">
-        <div className="grid h-12 w-12 place-items-center rounded-full bg-[#FFF6D8] text-[#F5A400]">
-          <Star className="h-7 w-7 fill-[#FFD43B]" aria-hidden="true" />
-        </div>
-        <div>
-          <p className="text-xl font-black text-[#10204A]">3/5</p>
-          <p className="text-xs font-bold text-[#667085]">games played</p>
-        </div>
-      </div>
-      <div className="pk-progress mt-3 h-2 overflow-hidden rounded-full bg-[#E8EDF6]">
-        <span className="block h-full w-[60%] rounded-full bg-[linear-gradient(90deg,#4C8DFF,#11BFC4)]" />
-      </div>
-      <p className="mt-2 text-center text-[0.68rem] font-bold text-[#667085]">Great job!</p>
-    </aside>
-  );
-}
-
-function ChallengeCard() {
-  return (
-    <aside className="relative overflow-hidden rounded-lg border border-[#E8F0FF] bg-white p-4 shadow-[0_12px_28px_rgba(49,64,106,0.1)]">
-      <Sparkles
-        className="absolute right-3 top-3 h-4 w-4 fill-[#8B5CF6] text-[#8B5CF6]"
-        aria-hidden="true"
-      />
-      <p className="text-xs font-black text-[#10204A]">New Challenge!</p>
-      <p className="mt-1 text-sm font-extrabold text-[#2F315F]">Prepositions</p>
-      <div className="mt-3 flex items-end justify-between gap-3">
-        <Button
-          asChild
-          className="h-9 rounded-full bg-[#FFF3F8] px-4 text-xs font-black text-[#FF3B8D] shadow-none hover:bg-[#FFE4F0]"
-        >
-          <Link to="/hub">Play now</Link>
-        </Button>
-        <div className="grid h-12 w-14 place-items-center rounded-lg bg-[linear-gradient(135deg,#EFFFF7,#FFF4E8)]">
-          <ScrollText className="h-7 w-7 text-[#FF981F]" aria-hidden="true" />
-        </div>
-      </div>
-    </aside>
   );
 }
 
