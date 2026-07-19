@@ -2,25 +2,20 @@
 import { useQuery } from "@tanstack/react-query";
 import {
   ArrowRight,
-  Backpack,
   BarChart3,
   BookOpen,
   ChevronRight,
-  ClipboardList,
   Gamepad2,
   Globe2,
-  GraduationCap,
   Instagram,
   Languages,
   Menu,
   Mic,
   Music,
   Puzzle,
-  ShieldCheck,
   Sparkles,
   Star,
   Trophy,
-  UsersRound,
   Youtube,
   type LucideIcon,
 } from "lucide-react";
@@ -76,7 +71,6 @@ const navItems: NavItem[] = [
   { label: "Games", icon: Gamepad2, to: "/hub" },
   { label: "Levels", icon: BarChart3, href: "#levels" },
   { label: "Leaderboards", icon: Trophy, to: "/hub/leaderboard" },
-  { label: "Teachers", icon: UsersRound, href: "#teachers" },
 ];
 
 const miniGames: MiniGame[] = [
@@ -188,23 +182,6 @@ const howItWorksSteps = [
   },
 ];
 
-const teacherBenefits = [
-  { label: "Classroom reports", icon: ClipboardList, bg: "bg-[#EDF3FF]", color: "text-[#4C8DFF]" },
-  {
-    label: "Student progress tracking",
-    icon: BarChart3,
-    bg: "bg-[#FFF4E8]",
-    color: "text-[#FF981F]",
-  },
-  {
-    label: "Safe and ad-free learning",
-    icon: ShieldCheck,
-    bg: "bg-[#EFFFF7]",
-    color: "text-[#11A66B]",
-  },
-  { label: "Aligned with ESL goals", icon: Puzzle, bg: "bg-[#F7F3FF]", color: "text-[#8B5CF6]" },
-];
-
 const footerLinks = [
   { label: "About", href: "#about" },
   { label: "Blog", href: "#blog" },
@@ -239,7 +216,6 @@ export function PrimKeetLanding() {
             <HowItWorks />
             <LeaderboardPreview />
           </section>
-          <TeacherBanner />
         </main>
         <PrimKeetFooter />
       </div>
@@ -842,52 +818,6 @@ function LeaderboardEmptyState({ message }: { message: string }) {
   );
 }
 
-function TeacherBanner() {
-  return (
-    <section id="teachers" className="mx-auto w-full max-w-[1500px] px-5 pb-8 md:px-10">
-      <Card className="pk-reveal grid gap-6 overflow-hidden rounded-lg border-[#F3DFD4] bg-[linear-gradient(105deg,#FFFDFB,#FFF7F0_52%,#F7F3FF)] p-6 text-[#10204A] shadow-[0_12px_34px_rgba(49,64,106,0.08)] lg:grid-cols-[210px_minmax(0,1fr)_250px] lg:items-center">
-        <ClassroomVisual />
-        <div>
-          <h2 className="text-2xl font-black">Loved by teachers. Built for classrooms.</h2>
-          <p className="mt-2 max-w-xl text-sm font-semibold leading-6 text-[#667085]">
-            PrimKeet makes it easy to engage students, track progress, and bring fun into English
-            learning.
-          </p>
-          <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            {teacherBenefits.map((benefit) => {
-              const Icon = benefit.icon;
-              return (
-                <div key={benefit.label} className="flex items-center gap-3">
-                  <span
-                    className={cn(
-                      "grid h-11 w-11 shrink-0 place-items-center rounded-lg",
-                      benefit.bg,
-                    )}
-                  >
-                    <Icon className={cn("h-5 w-5", benefit.color)} aria-hidden="true" />
-                  </span>
-                  <span className="text-sm font-extrabold leading-5 text-[#2F315F]">
-                    {benefit.label}
-                  </span>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-        <Button
-          asChild
-          className="h-12 rounded-full bg-[#8B5CF6] px-6 text-base font-black text-white shadow-[0_14px_30px_rgba(139,92,246,0.26)] transition hover:-translate-y-0.5 hover:bg-[#7C3AED] focus-visible:ring-2 focus-visible:ring-[#11BFC4] focus-visible:ring-offset-2 focus-visible:ring-offset-white"
-        >
-          <a href="#teachers">
-            Teachers, learn more
-            <ArrowRight aria-hidden="true" />
-          </a>
-        </Button>
-      </Card>
-    </section>
-  );
-}
-
 function PrimKeetFooter() {
   return (
     <footer className="mx-auto flex w-full max-w-[1500px] flex-col gap-5 px-5 pb-8 text-[#667085] md:px-10 lg:flex-row lg:items-center lg:justify-between">
@@ -935,21 +865,6 @@ function PrimKeetLogo({ className }: { className?: string }) {
       height={60}
       className={cn("object-contain", className)}
     />
-  );
-}
-
-function ClassroomVisual() {
-  return (
-    <div aria-hidden="true" className="relative h-32 min-w-[180px]">
-      <div className="absolute bottom-3 left-4 h-24 w-20 rotate-[-8deg] rounded-lg bg-[linear-gradient(145deg,#4C8DFF,#11BFC4)] shadow-[0_18px_30px_rgba(76,141,255,0.2)]" />
-      <div className="absolute bottom-1 left-0 h-9 w-28 rounded-lg bg-[#FF981F] shadow-[0_12px_22px_rgba(255,152,31,0.18)]" />
-      <div className="absolute bottom-12 left-14 grid h-16 w-16 place-items-center rounded-lg bg-[#FFF3F8] shadow-[0_12px_24px_rgba(49,64,106,0.12)]">
-        <Backpack className="h-10 w-10 text-[#FF3B8D]" />
-      </div>
-      <div className="absolute bottom-4 left-28 grid h-16 w-16 rotate-6 place-items-center rounded-lg bg-white shadow-[0_12px_24px_rgba(49,64,106,0.12)]">
-        <GraduationCap className="h-9 w-9 text-[#8B5CF6]" />
-      </div>
-    </div>
   );
 }
 
