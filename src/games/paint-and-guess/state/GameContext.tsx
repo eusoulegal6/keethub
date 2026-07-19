@@ -739,13 +739,23 @@ export function GameProvider({ children }: { children: ReactNode }) {
         });
         fetchRoomPlayers(gameState.roomId);
 
-        // Force the deadline to expire so the timer fires advanceRound
-        // on its next tick. Without this, a correct guess at T=5s means
-        // waiting 55s for the 60s timer to expire naturally.
-        setGameState((prev) => ({
-          ...prev,
-          round: { ...prev.round, deadlineAt: Date.now() - 1 },
-        }));
+        // Poll advanceRound until it succeeds. The timer still runs
+        // but waits for the deadline — we want the round to end as
+        // soon as all guessers are done, not when time runs out.
+        void (async () => {
+          const tryRoomId = gameState.roomId;
+          if (!tryRoomId) return;
+          for (let i = 0; i < 20; i++) {
+            await new Promise((r) => setTimeout(r, 500));
+            if (!channelRef.current || channelRef.current.id !== tryRoomId) return;
+            // If the timer already started advanceRound, skip this iteration
+            if (advanceCalledRef.current) continue;
+            await advanceRound(tryRoomId);
+            // If the RPC returned because someone else hadn't guessed yet,
+            // advanceCalledRef was reset by advanceRound's failure path.
+            // Loop and try again.
+          }
+        })();
       } else if (!result?.already_guessed) {
         setChatMessages((prev) => [...prev, createChatMessage(player, guess, "wrong-guess")]);
         channelRef.current.broadcast("wrong-guess", { player, guess });
