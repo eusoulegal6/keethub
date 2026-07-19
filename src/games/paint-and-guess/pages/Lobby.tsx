@@ -97,7 +97,7 @@ export default function Lobby({ onEnterRoom }: { onEnterRoom: () => void }) {
       });
 
       if (error || !(data as any)?.success) {
-        toast.error((data as any)?.error || "Invalid game PIN");
+        toast.error((data as any)?.error || error?.message || "Failed to join room");
         setIsJoining(false);
         return;
       }
