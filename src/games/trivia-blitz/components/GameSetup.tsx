@@ -74,6 +74,25 @@ export default function GameSetup({ multiplayer, defaultMode = "solo", onSwitchT
           <p>Pick a category, <strong>answer fast</strong>, climb the ranks.</p>
         </header>
 
+        {(multiplayer || onSwitchToMultiplayer) && (
+          <div className="flex justify-center mb-5">
+            <div className="trivia-blitz-mode-tabs">
+              <span className="trivia-blitz-mode-tab active">
+                <Play className="size-3.5" />
+                Solo
+              </span>
+              <button
+                type="button"
+                onClick={() => multiplayer ? setMode("multiplayer") : onSwitchToMultiplayer?.()}
+                className="trivia-blitz-mode-tab"
+              >
+                <Users className="size-3.5" />
+                Multiplayer
+              </button>
+            </div>
+          </div>
+        )}
+
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           {quizzes.map((quiz) => {
             const style = categoryStyles[quiz.id] ?? categoryStyles.general;

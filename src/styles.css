@@ -267,6 +267,33 @@
 .trivia-blitz-footer span { display: inline-flex; align-items: center; gap: 0.3rem; }
 .trivia-blitz-footer span:first-child { color: #65718a; }
 .trivia-blitz-footer span:first-child svg { color: #ff9d1d; }
+.trivia-blitz-mode-tabs {
+  display: inline-flex;
+  border-radius: 0.6rem;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  padding: 0.25rem;
+}
+.trivia-blitz-mode-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  border-radius: 0.45rem;
+  padding: 0.45rem 0.9rem;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: #52617b;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: background 180ms ease, color 180ms ease, box-shadow 180ms ease;
+}
+.trivia-blitz-mode-tab.active,
+.trivia-blitz-mode-tab:hover:not(.active) { color: #10204a; }
+.trivia-blitz-mode-tab.active {
+  background: #f1f5f9;
+  box-shadow: 0 1px 3px rgb(0 0 0 / 8%);
+}
 .trivia-blitz-footer i { color: #c7ced8; font-style: normal; }
 .trivia-blitz-multiplayer { margin-left: 0.5rem; color: #52617b; font-weight: 800; }
 .trivia-blitz-multiplayer:hover { color: #f13e7d; }
