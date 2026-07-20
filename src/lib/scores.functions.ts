@@ -20,6 +20,7 @@ export interface LeaderboardEntry {
   created_at: string;
   user_id: string;
   username: string | null;
+  avatar_config: unknown;
   game_slug: string;
   game_title: string;
 }
@@ -30,7 +31,7 @@ type GlobalScoreRow = {
   created_at: string;
   user_id: string;
   games: { slug: string | null; title: string | null } | null;
-  profiles: { username: string | null } | null;
+  profiles: { username: string | null; avatar_config: unknown } | null;
 };
 
 type GameScoreRow = {
@@ -51,7 +52,7 @@ export const getGlobalLeaderboard = createServerFn({ method: "GET" }).handler(as
   const supabase = publicClient();
   const { data, error } = await supabase
     .from("game_scores")
-    .select("id, score, created_at, user_id, games(slug, title), profiles(username)")
+    .select("id, score, created_at, user_id, games(slug, title), profiles(username, avatar_config)")
     .order("score", { ascending: false })
     .limit(100);
   if (error) {
@@ -75,6 +76,7 @@ export const getGlobalLeaderboard = createServerFn({ method: "GET" }).handler(as
     created_at: row.created_at,
     user_id: row.user_id,
     username: row.profiles?.username ?? null,
+    avatar_config: row.profiles?.avatar_config ?? null,
     game_slug: row.games?.slug ?? "",
     game_title: row.games?.title ?? "",
   }));

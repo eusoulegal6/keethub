@@ -3,7 +3,7 @@ import { queryOptions, useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import { CalendarDays, ChevronDown, ChevronRight, Sparkles, Star, Trophy } from "lucide-react";
 import { getGlobalLeaderboard, type LeaderboardEntry } from "@/lib/scores.functions";
-import { getDiceBearAvatarUrlFromSeed } from "@/lib/avatar/dicebear/api";
+import { getAvatarUrlFromProfile } from "@/lib/avatar/url";
 import { useAuth } from "@/hooks/use-auth";
 
 type DateRange = {
@@ -16,6 +16,7 @@ type PlayerStanding = {
   rank: number;
   userId: string;
   name: string;
+  avatarConfig: unknown;
   score: number;
   bestGameTitle: string;
   bestGameSlug: string;
@@ -314,7 +315,7 @@ function YourStandingCard({ standing }: { standing: PlayerStanding | null }) {
       {standing ? (
         <>
           <div className="flex items-center gap-3">
-            <Avatar seed={standing.userId} name={standing.name} size="md" />
+            <Avatar avatarConfig={standing.avatarConfig} name={standing.name} size="md" />
             <div className="min-w-0">
               <p className="truncate text-lg font-black text-[#17123d]">{standing.name}</p>
               <p className="text-sm font-semibold text-[#655f91]">Rank #{standing.rank}</p>
@@ -423,7 +424,7 @@ function WinnerCard({
           centered ? "h-44 w-44" : "h-36 w-36"
         } place-items-center rounded-full border-4 p-2 shadow-[inset_0_0_0_6px_rgba(255,255,255,0.52),0_16px_32px_rgba(99,76,139,0.18)]`}
       >
-        <Avatar seed={standing.userId} name={standing.name} size={centered ? "xl" : "lg"} />
+        <Avatar avatarConfig={standing.avatarConfig} name={standing.name} size={centered ? "xl" : "lg"} />
       </div>
 
       <h2 className="mt-6 text-2xl font-black text-[#16113b]">{standing.name}</h2>
@@ -536,7 +537,7 @@ function LeaderboardTableRow({
         <div
           className={`${rowAvatarClasses[index % rowAvatarClasses.length]} h-14 w-14 shrink-0 overflow-hidden rounded-full border-2 border-white shadow-[0_10px_20px_rgba(82,67,125,0.15)]`}
         >
-          <Avatar seed={row.userId} name={row.name} size="sm" />
+          <Avatar avatarConfig={row.avatarConfig} name={row.name} size="sm" />
         </div>
         <div className="min-w-0">
           <p className="truncate text-xl font-black text-[#17123d]">{row.name}</p>
@@ -624,11 +625,11 @@ function FooterBanner({ selectedRange }: { selectedRange: DateRange }) {
 }
 
 function Avatar({
-  seed,
+  avatarConfig,
   name,
   size,
 }: {
-  seed: string;
+  avatarConfig: unknown;
   name: string;
   size: "sm" | "md" | "lg" | "xl";
 }) {
@@ -641,9 +642,11 @@ function Avatar({
           ? "h-14 w-14"
           : "h-full w-full";
 
+  const px = size === "xl" ? 160 : size === "lg" ? 128 : size === "md" ? 56 : 32;
+
   return (
     <img
-      src={getDiceBearAvatarUrlFromSeed(seed || name)}
+      src={getAvatarUrlFromProfile(avatarConfig, px)}
       alt={`${name} avatar`}
       className={`${sizeClass} rounded-full object-cover drop-shadow-[0_14px_18px_rgba(75,55,111,0.18)] transition duration-500 group-hover:scale-105`}
     />
@@ -671,6 +674,7 @@ function buildStandings(rows: LeaderboardEntry[], range: DateRange) {
     {
       userId: string;
       name: string;
+      avatarConfig: unknown;
       score: number;
       bestScore: number;
       bestGameTitle: string;
@@ -688,6 +692,7 @@ function buildStandings(rows: LeaderboardEntry[], range: DateRange) {
       byUser.set(row.user_id, {
         userId: row.user_id,
         name: displayName,
+        avatarConfig: row.avatar_config,
         score: row.score,
         bestScore: row.score,
         bestGameTitle: row.game_title || "GameHub",
@@ -716,6 +721,7 @@ function buildStandings(rows: LeaderboardEntry[], range: DateRange) {
       rank: index + 1,
       userId: standing.userId,
       name: standing.name,
+      avatarConfig: standing.avatarConfig,
       score: standing.score,
       bestGameTitle: standing.bestGameTitle,
       bestGameSlug: standing.bestGameSlug,

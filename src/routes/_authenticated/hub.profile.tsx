@@ -15,8 +15,8 @@ import { useEffect } from "react";
 import { AvatarPreview } from "@/components/avatar/AvatarPreview";
 import { AvatarCustomizer } from "@/components/avatar/AvatarCustomizer";
 import type { AvatarConfig } from "@/lib/avatar/config";
-import { createDefaultAvatarConfig, encodeAvatarConfig } from "@/lib/avatar/config";
-import { validateAvatarConfig, sanitizeAvatarConfig } from "@/lib/avatar/validation";
+import { encodeAvatarConfig } from "@/lib/avatar/config";
+import { parseAvatarConfig } from "@/lib/avatar/url";
 
 const profileQuery = queryOptions({
   queryKey: ["me"],
@@ -38,15 +38,6 @@ const schema = z.object({
     .max(24)
     .regex(/^[a-z0-9_]+$/, "lowercase, numbers, underscores only"),
 });
-
-function parseAvatarConfig(raw: unknown): AvatarConfig {
-  if (raw && typeof raw === "object" && (raw as Record<string, unknown>).id) {
-    const obj = raw as Record<string, any>;
-    if (validateAvatarConfig(obj)) return obj as unknown as AvatarConfig;
-    return sanitizeAvatarConfig(obj);
-  }
-  return createDefaultAvatarConfig();
-}
 
 function ProfilePage() {
   const { data: profile } = useSuspenseQuery(profileQuery);
