@@ -82,11 +82,11 @@ test.describe("Other Games Smoke Tests", () => {
 
     await expect(page.getByText("Trivia Blitz")).toBeVisible({ timeout: 15_000 });
 
-    // Category grid should be visible
-    await expect(page.getByText(/how it works/i)).toBeVisible({ timeout: 10_000 });
+    // Category grid and speed-quiz details should be visible
+    await expect(page.getByText(/single-player speed quiz/i)).toBeVisible({ timeout: 10_000 });
 
     // Click a category to start a game
-    const categoryBtn = page.locator("button").filter({ hasText: /questions/i }).first();
+    const categoryBtn = page.getByRole("button", { name: /start general knowledge quiz/i });
     if (await categoryBtn.isVisible({ timeout: 5_000 }).catch(() => false)) {
       await categoryBtn.click();
       await page.waitForTimeout(500);
