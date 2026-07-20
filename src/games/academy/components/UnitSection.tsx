@@ -8,8 +8,13 @@ export function UnitSection({ unit }: { unit: Unit }) {
   const done = unit.tiles.filter((tile) => completedTiles.includes(tile.id)).length;
 
   return (
-    <section>
-      <header className="relative overflow-hidden rounded-[27px] bg-gradient-to-br from-[#82D900] via-[#55C900] to-[#45BB00] px-7 py-8 text-white shadow-[0_10px_18px_rgba(68,159,4,0.23)] sm:px-10 sm:py-9">
+    <section className="mb-12 last:mb-0">
+      <header
+        className="relative overflow-hidden rounded-[27px] px-7 py-8 text-white shadow-[0_10px_18px_rgba(16,32,74,0.18)] sm:px-10 sm:py-9"
+        style={{
+          background: `linear-gradient(135deg, ${unit.color}, color-mix(in srgb, ${unit.color} 78%, #10204A))`,
+        }}
+      >
         <div
           aria-hidden
           className="absolute -bottom-10 -left-3 h-24 w-32 rounded-[100%] bg-[#A9EB43]/30"
