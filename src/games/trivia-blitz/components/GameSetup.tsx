@@ -1,8 +1,5 @@
 import { useState } from "react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Play, Users } from "lucide-react";
+import { Play, Users, Zap } from "lucide-react";
 import { useTriviaStore } from "../store";
 import { cn } from "@/lib/utils";
 import MultiplayerLobby from "./MultiplayerLobby";
@@ -27,37 +24,31 @@ interface Props {
   onSwitchToMultiplayer?: () => void;
 }
 
-export default function GameSetup({ multiplayer, defaultMode = "solo" }: Props) {
+const categoryStyles: Record<string, { card: string; count: string }> = {
+  general: { card: "from-violet-500 to-indigo-500", count: "text-indigo-600" },
+  science: { card: "from-emerald-500 to-green-500", count: "text-emerald-600" },
+  history: { card: "from-orange-400 to-orange-500", count: "text-orange-600" },
+  "pop-culture": { card: "from-pink-500 to-rose-500", count: "text-pink-600" },
+  sports: { card: "from-blue-500 to-blue-600", count: "text-blue-600" },
+  geography: { card: "from-cyan-500 to-teal-500", count: "text-teal-600" },
+  technology: { card: "from-amber-400 to-yellow-500", count: "text-amber-600" },
+};
+
+export default function GameSetup({ multiplayer, defaultMode = "solo", onSwitchToMultiplayer }: Props) {
   const [mode, setMode] = useState<Mode>(defaultMode);
   const quizzes = useTriviaStore((s) => s.availableQuizzes);
-  const selectedId = useTriviaStore((s) => s.categoryId);
   const startGame = useTriviaStore((s) => s.startGame);
 
-  // ── Multiplayer mode ─────────────────────────────────────────
   if (mode === "multiplayer" && multiplayer) {
     return (
-      <div>
-        {/* Mode tabs */}
-        <div className="flex justify-center mb-6">
-          <div className="inline-flex rounded-lg border border-border bg-muted p-1">
-            <button
-              type="button"
-              onClick={() => setMode("solo")}
-              className="px-4 py-1.5 rounded-md text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
-            >
-              <Play className="w-4 h-4 inline mr-1" />
-              Solo
-            </button>
-            <button
-              type="button"
-              className="px-4 py-1.5 rounded-md text-sm font-medium bg-background text-foreground shadow-sm"
-            >
-              <Users className="w-4 h-4 inline mr-1" />
-              Multiplayer
-            </button>
-          </div>
-        </div>
-
+      <div className="max-w-3xl mx-auto px-4 py-8">
+        <button
+          type="button"
+          onClick={() => setMode("solo")}
+          className="mb-6 inline-flex items-center gap-2 text-sm font-semibold text-muted-foreground transition-colors hover:text-foreground"
+        >
+          <Play className="size-4" /> Back to solo quiz
+        </button>
         <MultiplayerLobby
           state={multiplayer.state}
           action={multiplayer.action}
@@ -72,91 +63,53 @@ export default function GameSetup({ multiplayer, defaultMode = "solo" }: Props) 
     );
   }
 
-  // ── Solo mode ────────────────────────────────────────────────
   return (
-    <div className="max-w-3xl mx-auto px-4 py-4 md:py-8">
-      {/* Mode tabs */}
-      <div className="flex justify-center mb-6">
-        <div className="inline-flex rounded-lg border border-border bg-muted p-1">
-          <button
-            type="button"
-            className="px-4 py-1.5 rounded-md text-sm font-medium bg-background text-foreground shadow-sm"
-          >
-            <Play className="w-4 h-4 inline mr-1" />
-            Solo
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              if (multiplayer) {
-                setMode("multiplayer");
-              } else {
-                onSwitchToMultiplayer?.();
-              }
-            }}
-            className="px-4 py-1.5 rounded-md text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
-          >
-            <Users className="w-4 h-4 inline mr-1" />
-            Multiplayer
-          </button>
+    <main className="trivia-blitz-setup">
+      <div className="trivia-blitz-spark trivia-blitz-spark-left" aria-hidden="true">☆</div>
+      <div className="trivia-blitz-spark trivia-blitz-spark-right" aria-hidden="true">✦</div>
+      <section className="trivia-blitz-content">
+        <header className="mb-6 text-center md:mb-7">
+          <span className="trivia-blitz-live"><Zap className="size-3.5 fill-current" /> Live quiz</span>
+          <h1>Trivia Blitz</h1>
+          <p>Pick a category, <strong>answer fast</strong>, climb the ranks.</p>
+        </header>
+
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          {quizzes.map((quiz) => {
+            const style = categoryStyles[quiz.id] ?? categoryStyles.general;
+            return (
+              <button
+                key={quiz.id}
+                type="button"
+                onClick={() => startGame(quiz.id)}
+                className={cn("trivia-blitz-category bg-gradient-to-br", style.card)}
+                aria-label={`Start ${quiz.name} quiz`}
+              >
+                <span className="trivia-blitz-category-icon" aria-hidden="true">{quiz.icon}</span>
+                <span className="min-w-0 flex-1 text-left">
+                  <span className="block text-xl font-extrabold leading-tight md:text-2xl">{quiz.name}</span>
+                  <span className="mt-1 block max-w-56 text-sm font-medium leading-5 text-white/95 md:text-base">{quiz.description}</span>
+                </span>
+                <span className={cn("trivia-blitz-question-count", style.count)}>{quiz.questionCount} Qs</span>
+              </button>
+            );
+          })}
         </div>
-      </div>
 
-      <div className="text-center mb-6 md:mb-8">
-        <h1 className="text-3xl md:text-5xl font-extrabold tracking-tight text-gradient-primary mb-3">
-          Trivia Blitz
-        </h1>
-        <p className="text-muted-foreground text-base md:text-lg max-w-md mx-auto">
-          Pick a category, answer fast, climb the ranks.
-        </p>
-      </div>
-
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-        {quizzes.map((quiz) => (
-          <button
-            key={quiz.id}
-            type="button"
-            onClick={() => startGame(quiz.id)}
-            className={cn(
-              "text-left rounded-xl border-2 p-4 transition-all duration-200 hover:border-primary/50 hover:bg-primary/5",
-              selectedId === quiz.id
-                ? "border-primary bg-primary/10"
-                : "border-border bg-card",
-            )}
-          >
-            <div className="flex items-start gap-3">
-              <span className="text-3xl flex-shrink-0">{quiz.icon}</span>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 mb-1">
-                  <span className="font-semibold text-base">{quiz.name}</span>
-                  <Badge variant="secondary" className="text-xs">
-                    {quiz.questionCount} Qs
-                  </Badge>
-                </div>
-                <p className="text-xs text-muted-foreground line-clamp-2">
-                  {quiz.description}
-                </p>
-              </div>
-            </div>
-          </button>
-        ))}
-      </div>
-
-      <Card className="mt-6 border-dashed">
-        <CardHeader className="pb-2">
-          <CardTitle className="text-base flex items-center gap-2">
-            <Play className="w-4 h-4" />
-            How it works
-          </CardTitle>
-          <CardDescription>Single-player speed quiz</CardDescription>
-        </CardHeader>
-        <CardContent className="text-sm text-muted-foreground space-y-1">
-          <p>7 questions per game. Base 1,000 points per correct answer.</p>
-          <p>Answer faster for up to a 2x speed bonus.</p>
-          <p>Consecutive correct answers earn up to 500 streak points.</p>
-          <p>Submit your final score to the leaderboard at the end.</p>
-        </CardContent>
-      </Card>
-    </div>
+        <footer className="trivia-blitz-footer">
+          <span><Zap className="size-4 fill-current" /> Single-player speed quiz</span>
+          <i>•</i><span>7 questions per game</span><i>•</i><span>Earn up to <strong>2x points</strong> for speed!</span>
+          {(multiplayer || onSwitchToMultiplayer) && (
+            <button
+              type="button"
+              onClick={() => multiplayer ? setMode("multiplayer") : onSwitchToMultiplayer?.()}
+              className="trivia-blitz-multiplayer"
+            >
+              <Users className="size-3.5" /> Play with friends
+            </button>
+          )}
+        </footer>
+      </section>
+    </main>
   );
 }
