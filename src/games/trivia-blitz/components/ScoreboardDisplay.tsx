@@ -1,9 +1,16 @@
 import { Star, Zap } from "lucide-react";
-import type { TriviaRoomState } from "../hooks/useTriviaMultiplayer";
-import ScoreboardDisplay from "./ScoreboardDisplay";
+
+export interface ScoreboardPlayer {
+  id: string;
+  name: string;
+  score: number;
+  avatar?: unknown;
+}
 
 interface Props {
-  state: TriviaRoomState;
+  players: ScoreboardPlayer[];
+  questionNumber: number;
+  totalQuestions: number;
 }
 
 function PlayerAvatar({ name, avatar }: { name: string; avatar: unknown }) {
@@ -16,13 +23,10 @@ function PlayerAvatar({ name, avatar }: { name: string; avatar: unknown }) {
   );
 }
 
-export default function MultiplayerScoreboard({ state }: Props) {
+export default function ScoreboardDisplay({ players, questionNumber, totalQuestions }: Props) {
+  const rankedPlayers = [...players].sort((a, b) => b.score - a.score);
+
   return (
-    <ScoreboardDisplay
-      players={state.players}
-      questionNumber={state.room.roundNumber}
-      totalQuestions={state.room.maxRounds}
-    />
     <main className="trivia-blitz-scoreboard-stage">
       <div className="trivia-blitz-scoreboard-content">
         <header className="trivia-blitz-scoreboard-heading">
@@ -35,16 +39,13 @@ export default function MultiplayerScoreboard({ state }: Props) {
             <i />
           </div>
           <p>
-            Question {state.room.roundNumber} of {state.room.maxRounds}
+            Question {questionNumber} of {totalQuestions}
           </p>
         </header>
 
         <section className="trivia-blitz-rankings" aria-label="Current player rankings">
-          {players.map((player, index) => (
-            <article
-              key={player.id}
-              className={`trivia-blitz-ranking trivia-blitz-ranking-${index + 1}`}
-            >
+          {rankedPlayers.map((player, index) => (
+            <article key={player.id} className={`trivia-blitz-ranking trivia-blitz-ranking-${index + 1}`}>
               <div className="trivia-blitz-rank-medal" aria-label={`Rank ${index + 1}`}>
                 <span>{index + 1}</span>
               </div>
