@@ -24,6 +24,7 @@ interface MultiplayerActions {
 interface Props {
   multiplayer?: MultiplayerActions;
   defaultMode?: Mode;
+  onSwitchToMultiplayer?: () => void;
 }
 
 export default function GameSetup({ multiplayer, defaultMode = "solo" }: Props) {
@@ -86,7 +87,13 @@ export default function GameSetup({ multiplayer, defaultMode = "solo" }: Props) 
           </button>
           <button
             type="button"
-            onClick={() => setMode("multiplayer")}
+            onClick={() => {
+              if (multiplayer) {
+                setMode("multiplayer");
+              } else {
+                onSwitchToMultiplayer?.();
+              }
+            }}
             className="px-4 py-1.5 rounded-md text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
           >
             <Users className="w-4 h-4 inline mr-1" />
