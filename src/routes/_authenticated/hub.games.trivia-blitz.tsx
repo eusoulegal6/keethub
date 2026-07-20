@@ -55,6 +55,17 @@ function TriviaBlitzRoute() {
 
   const isMultiplayer = mp.roomState !== null;
 
+  const mpActions = {
+    state: mp.roomState,
+    action: mp.action,
+    onCreateRoom: mp.createRoom,
+    onJoinRoom: mp.joinRoom,
+    onLeaveRoom: mp.leaveRoom,
+    onSetReady: mp.setReady,
+    onSelectCategory: mp.selectCategory,
+    onStartGame: mp.startGame,
+  };
+
   // Auto-advance multiplayer phases
   const advanceCalledPhaseRef = useRef<string | null>(null);
   useEffect(() => {
@@ -240,16 +251,7 @@ function TriviaBlitzRoute() {
       return (
         <GameSetup
           defaultMode="multiplayer"
-          multiplayer={{
-            state: mpState,
-            action: mp.action,
-            onCreateRoom: mp.createRoom,
-            onJoinRoom: mp.joinRoom,
-            onLeaveRoom: mp.leaveRoom,
-            onSetReady: mp.setReady,
-            onSelectCategory: mp.selectCategory,
-            onStartGame: mp.startGame,
-          }}
+          multiplayer={mpActions}
         />
       );
     }
@@ -261,7 +263,7 @@ function TriviaBlitzRoute() {
   const renderSoloPhase = () => {
     switch (soloPhase) {
       case "setup":
-        return <GameSetup />;
+        return <GameSetup multiplayer={mpActions} />;
       case "question-intro":
         return <QuestionIntro />;
       case "question":
@@ -280,7 +282,7 @@ function TriviaBlitzRoute() {
           />
         );
       default:
-        return <GameSetup />;
+        return <GameSetup multiplayer={mpActions} />;
     }
   };
 
