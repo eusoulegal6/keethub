@@ -1,62 +1,57 @@
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Trophy, Medal } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { Star, Zap } from "lucide-react";
 import type { TriviaRoomState } from "../hooks/useTriviaMultiplayer";
 
 interface Props {
   state: TriviaRoomState;
 }
 
-const MEDAL_COLORS = ["text-yellow-500", "text-slate-400", "text-amber-700"];
+function PlayerAvatar({ name, avatar }: { name: string; avatar: unknown }) {
+  const imageUrl = typeof avatar === "string" && /^https?:\/\//.test(avatar) ? avatar : null;
+
+  return (
+    <div className="trivia-blitz-scoreboard-avatar" aria-label={`${name}'s avatar`}>
+      {imageUrl ? <img src={imageUrl} alt="" /> : name.slice(0, 1).toUpperCase()}
+    </div>
+  );
+}
 
 export default function MultiplayerScoreboard({ state }: Props) {
   const players = [...(state.players ?? [])].sort((a, b) => b.score - a.score);
 
   return (
-    <div className="max-w-lg mx-auto px-4 py-4 md:py-8">
-      <div className="text-center mb-6">
-        <h2 className="text-2xl font-extrabold tracking-tight mb-1">Scoreboard</h2>
-        <p className="text-sm text-muted-foreground">
-          Question {state.room.roundNumber} of {state.room.maxRounds}
-        </p>
-      </div>
+    <main className="trivia-blitz-scoreboard-stage">
+      <div className="trivia-blitz-scoreboard-content">
+        <header className="trivia-blitz-scoreboard-heading">
+          <span className="trivia-blitz-live">
+            <Zap className="size-3.5 fill-current" /> Live quiz
+          </span>
+          <div className="trivia-blitz-scoreboard-title-wrap" aria-hidden="true">
+            <i />
+            <h1>Scoreboard</h1>
+            <i />
+          </div>
+          <p>
+            Question {state.room.roundNumber} of {state.room.maxRounds}
+          </p>
+        </header>
 
-      <Card>
-        <CardContent className="py-2">
+        <section className="trivia-blitz-rankings" aria-label="Current player rankings">
           {players.map((player, index) => (
-            <div
+            <article
               key={player.id}
-              className={cn(
-                "flex items-center gap-3 py-3 border-b border-border last:border-0",
-                index === 0 && "bg-yellow-500/5 -mx-4 px-4 rounded-lg",
-              )}
+              className={`trivia-blitz-ranking trivia-blitz-ranking-${index + 1}`}
             >
-              <div className="w-8 text-center flex-shrink-0">
-                {index === 0 ? (
-                  <Trophy className="w-5 h-5 text-yellow-500 mx-auto" />
-                ) : index < 3 ? (
-                  <Medal className={cn("w-5 h-5 mx-auto", MEDAL_COLORS[index])} />
-                ) : (
-                  <span className="text-sm font-bold text-muted-foreground tabular-nums">
-                    {index + 1}
-                  </span>
-                )}
+              <div className="trivia-blitz-rank-medal" aria-label={`Rank ${index + 1}`}>
+                <span>{index + 1}</span>
               </div>
-
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold truncate">{player.name}</p>
-                {player.streak > 1 && (
-                  <p className="text-xs text-warning">{player.streak}x streak</p>
-                )}
-              </div>
-
-              <div className="text-right flex-shrink-0">
-                <p className="text-lg font-bold tabular-nums">{player.score.toLocaleString()}</p>
-              </div>
-            </div>
+              <PlayerAvatar name={player.name} avatar={player.avatar} />
+              <strong className="trivia-blitz-ranking-name">{player.name}</strong>
+              <strong className="trivia-blitz-ranking-score">{player.score.toLocaleString()}</strong>
+              <Star className="trivia-blitz-ranking-star" aria-label="points" />
+            </article>
           ))}
-        </CardContent>
-      </Card>
-    </div>
+        </section>
+      </div>
+    </main>
   );
 }
