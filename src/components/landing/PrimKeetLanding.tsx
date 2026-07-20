@@ -1,4 +1,5 @@
-﻿import { Link } from "@tanstack/react-router";
+﻿import { useEffect, useState } from "react";
+import { Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import {
   ArrowRight,
@@ -23,9 +24,10 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { supabase } from "@/integrations/supabase/client";
 import { getGlobalLeaderboard, type LeaderboardEntry } from "@/lib/scores.functions";
 import { useAuth } from "@/hooks/use-auth";
-import { getDiceBearAvatarUrlFromSeed } from "@/lib/avatar/dicebear/api";
+import { getAvatarUrlFromProfile } from "@/lib/avatar/url";
 import { cn } from "@/lib/utils";
 
 type RoutePath = "/auth" | "/hub" | "/hub/leaderboard";
@@ -199,6 +201,19 @@ const socialLinks = [
 
 export function PrimKeetLanding() {
   const { user, isAuthenticated } = useAuth();
+  const [avatarConfig, setAvatarConfig] = useState<unknown>(null);
+
+  useEffect(() => {
+    if (!isAuthenticated || !user) return;
+    supabase
+      .from("profiles")
+      .select("avatar_config")
+      .eq("id", user.id)
+      .single()
+      .then(({ data }) => {
+        if (data) setAvatarConfig(data.avatar_config);
+      });
+  }, [isAuthenticated, user?.id]);
 
   return (
     <div className="min-h-screen overflow-x-hidden bg-[#FFFDFB] text-[#10204A]">
@@ -208,9 +223,9 @@ export function PrimKeetLanding() {
       <div className="pointer-events-none absolute right-0 top-[330px] h-32 w-64 rounded-l-full bg-[#DFF2FF]" />
 
       <div className="relative z-10">
-        <PrimKeetNavbar isAuthenticated={isAuthenticated} user={user} />
+        <PrimKeetNavbar isAuthenticated={isAuthenticated} user={user} avatarConfig={avatarConfig} />
         <main>
-          <HeroSection isAuthenticated={isAuthenticated} user={user} />
+          <HeroSection isAuthenticated={isAuthenticated} user={user} avatarConfig={avatarConfig} />
           <GameCategoryGrid />
           <section className="mx-auto grid w-full max-w-[1500px] gap-5 px-5 pb-6 md:px-10 lg:grid-cols-[1.08fr_0.92fr]">
             <HowItWorks />
@@ -226,12 +241,14 @@ export function PrimKeetLanding() {
 function PrimKeetNavbar({
   isAuthenticated,
   user,
+  avatarConfig,
 }: {
   isAuthenticated: boolean;
   user: { id: string; email?: string | null | undefined } | null;
+  avatarConfig: unknown;
 }) {
   const username = user?.email?.split("@")[0] ?? "Player";
-  const avatarUrl = user ? getDiceBearAvatarUrlFromSeed(user.id) : null;
+  const avatarUrl = user ? getAvatarUrlFromProfile(avatarConfig) : null;
 
   return (
     <header className="mx-auto flex w-full max-w-[1780px] px-4 pt-5 md:px-8">
@@ -365,9 +382,11 @@ function MobileNavItem({ item }: { item: NavItem }) {
 function HeroSection({
   isAuthenticated,
   user,
+  avatarConfig,
 }: {
   isAuthenticated: boolean;
   user: { id: string; email?: string | null | undefined } | null;
+  avatarConfig: unknown;
 }) {
   return (
     <section className="mx-auto grid w-full max-w-[1650px] items-center gap-10 px-5 pb-8 pt-12 md:px-10 md:pb-10 lg:grid-cols-[0.86fr_1.14fr] lg:gap-12 lg:pt-16">
@@ -403,7 +422,7 @@ function HeroSection({
       </div>
 
       <div className="pk-reveal pk-delay-1">
-        <StudentDashboardPreview isAuthenticated={isAuthenticated} user={user} />
+        <StudentDashboardPreview isAuthenticated={isAuthenticated} user={user} avatarConfig={avatarConfig} />
       </div>
     </section>
   );
@@ -424,12 +443,14 @@ function DecorativeMarks() {
 function StudentDashboardPreview({
   isAuthenticated,
   user,
+  avatarConfig,
 }: {
   isAuthenticated: boolean;
   user: { id: string; email?: string | null | undefined } | null;
+  avatarConfig: unknown;
 }) {
   const username = user?.email?.split("@")[0] ?? "Player";
-  const avatarUrl = user ? getDiceBearAvatarUrlFromSeed(user.id) : null;
+  const avatarUrl = user ? getAvatarUrlFromProfile(avatarConfig) : null;
 
   // Pull real score from leaderboard for this user
   const { data: leaderboardRows = [] } = useQuery({
