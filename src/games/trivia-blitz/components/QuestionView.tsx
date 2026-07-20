@@ -1,6 +1,5 @@
-import { useEffect, useRef } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Progress } from "@/components/ui/progress";
+import { useEffect, useRef, type CSSProperties } from "react";
+import { FileText, Rocket, Target, Timer, Trophy, UsersRound, Zap } from "lucide-react";
 import { useTriviaStore } from "../store";
 import { cn } from "@/lib/utils";
 
@@ -29,9 +28,9 @@ export default function QuestionView() {
   if (!question) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
-        <Card className="p-8 text-center">
+        <div className="rounded-xl border border-border bg-card p-8 text-center">
           <p className="text-muted-foreground">Loading question...</p>
-        </Card>
+        </div>
       </div>
     );
   }
@@ -39,83 +38,112 @@ export default function QuestionView() {
   const progress = (timeLeft / question.timeLimit) * 100;
 
   return (
-    <div className="max-w-2xl mx-auto px-4 py-4 md:py-8">
-      {/* Top bar: question count, timer, score */}
-      <div className="flex items-center justify-between mb-4">
-        <span className="text-sm text-muted-foreground font-medium">
-          Question {currentIndex + 1} of {questions.length}
-        </span>
-        <div className="flex items-center gap-3">
-          {streak > 1 && (
-            <span className="text-sm font-semibold text-warning">{streak}x streak</span>
-          )}
-          <span className="text-sm text-muted-foreground">
-            Score:{" "}
-            <span className="font-bold text-foreground tabular-nums">{score.toLocaleString()}</span>
+    <main className="trivia-blitz-question-stage">
+      <div className="trivia-blitz-question-content">
+        <header className="trivia-blitz-question-heading">
+          <span className="trivia-blitz-live">
+            <Zap className="size-3.5 fill-current" /> Live quiz
           </span>
-        </div>
-      </div>
+          <h1>Trivia Blitz</h1>
+          <p>
+            Pick a category, <strong>answer fast</strong>, climb the ranks.
+          </p>
+        </header>
 
-      {/* Timer bar */}
-      <div className="mb-6">
-        <div className="flex items-center justify-between mb-2">
-          <span
-            className={cn(
-              "text-3xl font-bold tabular-nums transition-colors",
-              timeLeft <= 5 ? "text-destructive" : "text-foreground",
-            )}
-          >
-            {timeLeft}s
-          </span>
-        </div>
-        <Progress
-          value={progress}
-          className={cn("h-2", timeLeft <= 5 ? "[&>div]:bg-destructive" : "[&>div]:bg-primary")}
-        />
-      </div>
-
-      {/* Question text */}
-      <Card className="mb-6">
-        <CardHeader>
-          <CardTitle className="text-xl md:text-2xl text-center">{question.text}</CardTitle>
-        </CardHeader>
-      </Card>
-
-      {/* Answer buttons */}
-      {hasAnswered ? (
-        <Card className="p-6 text-center">
-          <div className="mb-3">
-            {lastResult?.isCorrect ? (
-              <p className="text-xl font-semibold text-success">
-                Correct! +{lastResult.points.toLocaleString()} points
-              </p>
-            ) : (
-              <p className="text-xl font-semibold text-destructive">Incorrect</p>
-            )}
+        <section className="trivia-blitz-status" aria-label="Question status">
+          <div className="trivia-blitz-status-card">
+            <FileText />
+            <span>
+              Question {currentIndex + 1} of {questions.length}
+            </span>
           </div>
-          <p className="text-sm text-muted-foreground">Waiting for next question...</p>
-        </Card>
-      ) : (
-        <div className="grid grid-cols-2 gap-3">
-          {question.options.map((option) => (
-            <button
-              key={option.id}
-              type="button"
-              onClick={() => selectAnswer(option.id)}
-              disabled={hasAnswered}
-              className="group relative rounded-xl border-2 border-border bg-card p-4 md:p-6 text-left transition-all duration-200 hover:border-primary/60 hover:bg-primary/5 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <div className="flex items-center gap-3">
-                <div
-                  className="w-10 h-10 md:w-12 md:h-12 rounded-full flex-shrink-0 border-2 border-white/20 shadow-inner"
-                  style={{ backgroundColor: option.color }}
-                />
-                <span className="font-semibold text-base md:text-lg">{option.text}</span>
-              </div>
-            </button>
-          ))}
+          <div className={cn("trivia-blitz-timer", timeLeft <= 5 && "is-urgent")}>
+            <Timer />
+            <strong>{timeLeft}s</strong>
+          </div>
+          <div className="trivia-blitz-status-card trivia-blitz-score">
+            <UsersRound />
+            <span>
+              {streak > 1 ? `${streak}x streak · ` : ""}Score: {score.toLocaleString()}
+            </span>
+          </div>
+        </section>
+        <div
+          className="trivia-blitz-progress"
+          aria-label={`${Math.round(progress)}% of time remaining`}
+        >
+          <span style={{ width: `${progress}%` }} />
         </div>
-      )}
-    </div>
+
+        <section className="trivia-blitz-question-card">
+          <div className="trivia-blitz-question-burst left" aria-hidden="true">
+            ☄
+          </div>
+          <div className="trivia-blitz-question-burst right" aria-hidden="true">
+            ☄
+          </div>
+          <h2>{question.text}</h2>
+          <div className="trivia-blitz-answer-grid">
+            {question.options.map((option, index) => (
+              <button
+                key={option.id}
+                type="button"
+                onClick={() => selectAnswer(option.id)}
+                disabled={hasAnswered}
+                className={cn(
+                  "trivia-blitz-answer",
+                  hasAnswered && selectedOptionId === option.id && "is-selected",
+                )}
+                style={{ "--answer-color": option.color } as CSSProperties}
+              >
+                <span className="trivia-blitz-answer-letter">
+                  {String.fromCharCode(65 + index)}
+                </span>
+                <span>{option.text}</span>
+              </button>
+            ))}
+          </div>
+          {hasAnswered && (
+            <p className="trivia-blitz-answer-wait">
+              {lastResult?.isCorrect
+                ? `Correct! +${lastResult.points.toLocaleString()} points`
+                : "Answer locked in — get ready for the reveal!"}
+            </p>
+          )}
+        </section>
+
+        <footer className="trivia-blitz-tips">
+          <div>
+            <span className="trivia-blitz-tip-icon pink">
+              <Rocket />
+            </span>
+            <p>
+              <strong>Answer fast!</strong>
+              <small>
+                Earn up to <b>2x points</b> for speed.
+              </small>
+            </p>
+          </div>
+          <div>
+            <span className="trivia-blitz-tip-icon green">
+              <Target />
+            </span>
+            <p>
+              <strong>Stay accurate!</strong>
+              <small>Correct answers keep your streak.</small>
+            </p>
+          </div>
+          <div>
+            <span className="trivia-blitz-tip-icon gold">
+              <Trophy />
+            </span>
+            <p>
+              <strong>Climb the ranks!</strong>
+              <small>Top players lead the leaderboard.</small>
+            </p>
+          </div>
+        </footer>
+      </div>
+    </main>
   );
 }
