@@ -1,11 +1,10 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { UnitPath } from "@/games/academy/components/UnitPath";
+import { createFileRoute, Outlet } from "@tanstack/react-router";
 
 export const Route = createFileRoute("/_authenticated/hub/academy")({
   ssr: false,
-  component: AcademyPage,
+  component: AcademyLayout,
 });
 
-function AcademyPage() {
-  return <UnitPath />;
+function AcademyLayout() {
+  return <Outlet />;
 }

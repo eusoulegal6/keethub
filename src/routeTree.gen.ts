@@ -19,6 +19,7 @@ import { Route as AuthenticatedHubIndexRouteImport } from './routes/_authenticat
 import { Route as AuthenticatedHubProfileRouteImport } from './routes/_authenticated/hub.profile'
 import { Route as AuthenticatedHubLeaderboardRouteImport } from './routes/_authenticated/hub.leaderboard'
 import { Route as AuthenticatedHubAcademyRouteImport } from './routes/_authenticated/hub.academy'
+import { Route as AuthenticatedHubAcademyIndexRouteImport } from './routes/_authenticated/hub.academy.index'
 import { Route as AuthenticatedHubGamesTriviaBlitzRouteImport } from './routes/_authenticated/hub.games.trivia-blitz'
 import { Route as AuthenticatedHubGamesSemanticRouteImport } from './routes/_authenticated/hub.games.semantic'
 import { Route as AuthenticatedHubGamesPingPongRouteImport } from './routes/_authenticated/hub.games.ping-pong'
@@ -78,6 +79,12 @@ const AuthenticatedHubAcademyRoute = AuthenticatedHubAcademyRouteImport.update({
   path: '/academy',
   getParentRoute: () => AuthenticatedHubRoute,
 } as any)
+const AuthenticatedHubAcademyIndexRoute =
+  AuthenticatedHubAcademyIndexRouteImport.update({
+    id: '/',
+    path: '/',
+    getParentRoute: () => AuthenticatedHubAcademyRoute,
+  } as any)
 const AuthenticatedHubGamesTriviaBlitzRoute =
   AuthenticatedHubGamesTriviaBlitzRouteImport.update({
     id: '/games/trivia-blitz',
@@ -145,13 +152,13 @@ export interface FileRoutesByFullPath {
   '/hub/games/ping-pong': typeof AuthenticatedHubGamesPingPongRoute
   '/hub/games/semantic': typeof AuthenticatedHubGamesSemanticRoute
   '/hub/games/trivia-blitz': typeof AuthenticatedHubGamesTriviaBlitzRoute
+  '/hub/academy/': typeof AuthenticatedHubAcademyIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRouteWithChildren
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/auth/callback': typeof AuthCallbackRoute
-  '/hub/academy': typeof AuthenticatedHubAcademyRouteWithChildren
   '/hub/leaderboard': typeof AuthenticatedHubLeaderboardRoute
   '/hub/profile': typeof AuthenticatedHubProfileRoute
   '/hub': typeof AuthenticatedHubIndexRoute
@@ -163,6 +170,7 @@ export interface FileRoutesByTo {
   '/hub/games/ping-pong': typeof AuthenticatedHubGamesPingPongRoute
   '/hub/games/semantic': typeof AuthenticatedHubGamesSemanticRoute
   '/hub/games/trivia-blitz': typeof AuthenticatedHubGamesTriviaBlitzRoute
+  '/hub/academy': typeof AuthenticatedHubAcademyIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -184,6 +192,7 @@ export interface FileRoutesById {
   '/_authenticated/hub/games/ping-pong': typeof AuthenticatedHubGamesPingPongRoute
   '/_authenticated/hub/games/semantic': typeof AuthenticatedHubGamesSemanticRoute
   '/_authenticated/hub/games/trivia-blitz': typeof AuthenticatedHubGamesTriviaBlitzRoute
+  '/_authenticated/hub/academy/': typeof AuthenticatedHubAcademyIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -205,13 +214,13 @@ export interface FileRouteTypes {
     | '/hub/games/ping-pong'
     | '/hub/games/semantic'
     | '/hub/games/trivia-blitz'
+    | '/hub/academy/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/auth'
     | '/sitemap.xml'
     | '/auth/callback'
-    | '/hub/academy'
     | '/hub/leaderboard'
     | '/hub/profile'
     | '/hub'
@@ -223,6 +232,7 @@ export interface FileRouteTypes {
     | '/hub/games/ping-pong'
     | '/hub/games/semantic'
     | '/hub/games/trivia-blitz'
+    | '/hub/academy'
   id:
     | '__root__'
     | '/'
@@ -243,6 +253,7 @@ export interface FileRouteTypes {
     | '/_authenticated/hub/games/ping-pong'
     | '/_authenticated/hub/games/semantic'
     | '/_authenticated/hub/games/trivia-blitz'
+    | '/_authenticated/hub/academy/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -324,6 +335,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedHubAcademyRouteImport
       parentRoute: typeof AuthenticatedHubRoute
     }
+    '/_authenticated/hub/academy/': {
+      id: '/_authenticated/hub/academy/'
+      path: '/'
+      fullPath: '/hub/academy/'
+      preLoaderRoute: typeof AuthenticatedHubAcademyIndexRouteImport
+      parentRoute: typeof AuthenticatedHubAcademyRoute
+    }
     '/_authenticated/hub/games/trivia-blitz': {
       id: '/_authenticated/hub/games/trivia-blitz'
       path: '/games/trivia-blitz'
@@ -385,11 +403,13 @@ declare module '@tanstack/react-router' {
 
 interface AuthenticatedHubAcademyRouteChildren {
   AuthenticatedHubAcademyLessonRoute: typeof AuthenticatedHubAcademyLessonRoute
+  AuthenticatedHubAcademyIndexRoute: typeof AuthenticatedHubAcademyIndexRoute
 }
 
 const AuthenticatedHubAcademyRouteChildren: AuthenticatedHubAcademyRouteChildren =
   {
     AuthenticatedHubAcademyLessonRoute: AuthenticatedHubAcademyLessonRoute,
+    AuthenticatedHubAcademyIndexRoute: AuthenticatedHubAcademyIndexRoute,
   }
 
 const AuthenticatedHubAcademyRouteWithChildren =
