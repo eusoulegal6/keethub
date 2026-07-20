@@ -18,6 +18,7 @@ function PlayerAvatar({ name, avatar }: { name: string; avatar: unknown }) {
 
 export default function MultiplayerScoreboard({ state }: Props) {
   return (
+    <>
     <ScoreboardDisplay
       players={state.players}
       questionNumber={state.room.roundNumber}
@@ -40,7 +41,7 @@ export default function MultiplayerScoreboard({ state }: Props) {
         </header>
 
         <section className="trivia-blitz-rankings" aria-label="Current player rankings">
-          {players.map((player, index) => (
+          {state.players.map((player, index) => (
             <article
               key={player.id}
               className={`trivia-blitz-ranking trivia-blitz-ranking-${index + 1}`}
@@ -57,5 +58,6 @@ export default function MultiplayerScoreboard({ state }: Props) {
         </section>
       </div>
     </main>
+    </>
   );
 }
