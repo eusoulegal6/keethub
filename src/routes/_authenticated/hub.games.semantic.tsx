@@ -10,6 +10,10 @@ import {
   Share2,
   MoreVertical,
   HelpCircle,
+  BarChart3,
+  Gift,
+  ChevronDown,
+  Sparkles,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useState, useEffect, FormEvent } from "react";
@@ -248,19 +252,19 @@ function SemanticGame() {
   // ── Render ───────────────────────────────────────────────────
 
   return (
-    <div className="px-6 py-8 md:px-10 max-w-2xl mx-auto">
+    <div className="mx-auto max-w-[1340px] px-5 py-7 md:px-10">
       <Link
         to="/hub"
-        className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground mb-6"
+        className="mb-5 inline-flex items-center gap-1 text-sm font-medium text-[#667085] transition-colors hover:text-[#10204A]"
       >
         <ArrowLeft className="w-4 h-4" /> Back to library
       </Link>
 
       {/* Header */}
-      <div className="flex items-center justify-between mb-8">
+      <div className="mb-5 flex items-center justify-between">
         <div>
-          <h1 className="text-4xl font-extrabold tracking-tight">{game.title}</h1>
-          <p className="text-sm text-muted-foreground mt-1">
+          <h1 className="text-4xl font-extrabold tracking-tight text-[#10204A]">{game.title}</h1>
+          <p className="mt-1 text-sm font-medium text-[#667085]">
             #{dailyWordIndex()} · {gs.guesses.length}{" "}
             {gs.guesses.length === 1 ? "guess" : "guesses"}
           </p>
@@ -269,8 +273,13 @@ function SemanticGame() {
           {/* Help dialog */}
           <Dialog>
             <DialogTrigger asChild>
-              <Button variant="outline" size="icon">
+              <Button
+                variant="outline"
+                className="h-10 rounded-xl border-[#E2E7F0] px-4 text-[#10204A] shadow-sm"
+                size="sm"
+              >
                 <HelpCircle className="h-4 w-4" />
+                <span>How to play</span>
               </Button>
             </DialogTrigger>
             <DialogContent>
@@ -313,7 +322,12 @@ function SemanticGame() {
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="icon" disabled={gs.isComplete}>
+              <Button
+                variant="outline"
+                className="h-10 w-10 rounded-xl border-[#E2E7F0] shadow-sm"
+                size="icon"
+                disabled={gs.isComplete}
+              >
                 <MoreVertical className="h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
@@ -329,112 +343,77 @@ function SemanticGame() {
         </div>
       </div>
 
-      {/* Active game */}
-      {!gs.isComplete ? (
-        <>
-          <GuessInput onSubmit={handleGuess} />
-          <div className="mt-6">
-            {gs.guesses.length === 0 ? (
-              <div className="text-center text-muted-foreground py-16">
-                <p className="text-lg">Enter a word above to make your first guess.</p>
-                <p className="text-sm mt-2">Words that look similar to the target score higher.</p>
-              </div>
-            ) : (
-              <ScrollArea className="max-h-[50vh]">
-                <div className="space-y-2">
-                  {gs.guesses.map((guess, i) => {
-                    const heat = getHeat(guess.similarity);
-                    const color = HEAT_COLORS[heat];
-                    return (
-                      <div
-                        key={`${guess.word}-${i}`}
-                        className="relative overflow-hidden rounded-lg border bg-card p-4 transition-colors"
-                      >
-                        <div
-                          className="absolute inset-0 opacity-[0.12]"
-                          style={{
-                            background: `linear-gradient(to right, ${color} ${guess.similarity}%, transparent ${guess.similarity}%)`,
-                          }}
-                        />
-                        <div className="relative flex items-center justify-between">
-                          <div>
-                            <p className="font-semibold text-lg">{guess.word}</p>
-                            <p className="text-xs text-muted-foreground">{HEAT_LABELS[heat]}</p>
-                          </div>
-                          <div className="text-right">
-                            <div className="font-bold text-xl tabular-nums" style={{ color }}>
-                              {guess.similarity}%
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </ScrollArea>
-            )}
-          </div>
-        </>
-      ) : (
-        /* Game over */
-        <Card className="w-full border-2">
-          <CardHeader className="text-center">
-            {gs.gaveUp ? (
-              <>
-                <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-muted">
-                  <Flag className="h-8 w-8 text-muted-foreground" />
-                </div>
-                <CardTitle className="text-2xl">Game Over</CardTitle>
-                <CardDescription>
-                  The word was <span className="font-bold">"{gs.targetWord}"</span>. Better luck
-                  tomorrow!
-                </CardDescription>
-              </>
-            ) : (
-              <>
-                <div
-                  className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full"
-                  style={{ backgroundColor: HEAT_COLORS.perfect }}
-                >
-                  <Trophy className="h-8 w-8 text-white" />
-                </div>
-                <CardTitle className="text-2xl">Congratulations!</CardTitle>
-                <CardDescription>
-                  You found <span className="font-bold">"{gs.targetWord}"</span> in{" "}
-                  {gs.guesses.length} {gs.guesses.length === 1 ? "guess" : "guesses"}!
-                </CardDescription>
-              </>
-            )}
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <Button onClick={handleShare} className="w-full" size="lg">
-              <Share2 className="mr-2 h-4 w-4" /> Share
-            </Button>
-            {!gs.gaveUp && (
-              <Button
-                variant="outline"
-                className="w-full"
-                onClick={() => scoreMutation.mutate()}
-                disabled={scoreMutation.isPending || gs.scoreSubmitted}
-              >
-                <Trophy className="mr-2 h-4 w-4" />
-                {scoreMutation.isPending
-                  ? "Submitting..."
-                  : gs.scoreSubmitted
-                    ? "Score Submitted"
-                    : "Submit Score"}
-              </Button>
-            )}
-            <p className="text-center text-sm text-muted-foreground">
-              New word available tomorrow!
-            </p>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Leaderboard */}
-      <div className="mt-8">
-        <LeaderboardPreview gameId={game.id} />
+      <div className="grid items-start gap-7 xl:grid-cols-[minmax(0,1fr)_400px]">
+        <main>
+          {/* Active game */}
+          {!gs.isComplete ? (
+            <>
+              <GuessInput onSubmit={handleGuess} />
+              <HowToPlayCard />
+              <GuessTable guesses={gs.guesses} />
+            </>
+          ) : (
+            /* Game over */
+            <Card className="w-full border-2">
+              <CardHeader className="text-center">
+                {gs.gaveUp ? (
+                  <>
+                    <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-muted">
+                      <Flag className="h-8 w-8 text-muted-foreground" />
+                    </div>
+                    <CardTitle className="text-2xl">Game Over</CardTitle>
+                    <CardDescription>
+                      The word was <span className="font-bold">"{gs.targetWord}"</span>. Better luck
+                      tomorrow!
+                    </CardDescription>
+                  </>
+                ) : (
+                  <>
+                    <div
+                      className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full"
+                      style={{ backgroundColor: HEAT_COLORS.perfect }}
+                    >
+                      <Trophy className="h-8 w-8 text-white" />
+                    </div>
+                    <CardTitle className="text-2xl">Congratulations!</CardTitle>
+                    <CardDescription>
+                      You found <span className="font-bold">"{gs.targetWord}"</span> in{" "}
+                      {gs.guesses.length} {gs.guesses.length === 1 ? "guess" : "guesses"}!
+                    </CardDescription>
+                  </>
+                )}
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <Button onClick={handleShare} className="w-full" size="lg">
+                  <Share2 className="mr-2 h-4 w-4" /> Share
+                </Button>
+                {!gs.gaveUp && (
+                  <Button
+                    variant="outline"
+                    className="w-full"
+                    onClick={() => scoreMutation.mutate()}
+                    disabled={scoreMutation.isPending || gs.scoreSubmitted}
+                  >
+                    <Trophy className="mr-2 h-4 w-4" />
+                    {scoreMutation.isPending
+                      ? "Submitting..."
+                      : gs.scoreSubmitted
+                        ? "Score Submitted"
+                        : "Submit Score"}
+                  </Button>
+                )}
+                <p className="text-center text-sm text-muted-foreground">
+                  New word available tomorrow!
+                </p>
+              </CardContent>
+            </Card>
+          )}
+        </main>
+        <aside className="space-y-5">
+          <TemperatureCard guesses={gs.guesses} />
+          <LeaderboardPreview gameId={game.id} />
+          <DailyChallengeCard />
+        </aside>
       </div>
     </div>
   );
@@ -457,21 +436,161 @@ function GuessInput({ onSubmit }: { onSubmit: (w: string) => void }) {
   };
 
   return (
-    <form onSubmit={handle} className="flex gap-2 w-full">
+    <form onSubmit={handle} className="flex w-full gap-2">
       <Input
         type="text"
         value={v}
         onChange={(e) => setV(e.target.value)}
-        placeholder="Type a word..."
-        className="flex-1 text-base"
+        placeholder="Type a word and press enter or send"
+        className="h-[54px] flex-1 rounded-2xl border-[#B7B8F2] px-5 text-base shadow-[0_0_0_1px_rgba(139,92,246,0.08)] placeholder:text-[#7D88A7] focus-visible:ring-[#8B5CF6]"
         autoFocus
         autoComplete="off"
         spellCheck={false}
       />
-      <Button type="submit" disabled={!v.trim()} size="icon" className="shrink-0">
-        <Send className="h-4 w-4" />
+      <Button
+        type="submit"
+        disabled={!v.trim()}
+        size="icon"
+        className="h-[54px] w-[58px] shrink-0 rounded-2xl bg-[#F35AA5] shadow-[0_8px_16px_rgba(243,90,165,0.25)] hover:bg-[#E84696]"
+      >
+        <Send className="h-5 w-5" />
       </Button>
     </form>
+  );
+}
+
+function HowToPlayCard() {
+  return (
+    <section className="mt-6 flex min-h-[148px] items-center gap-6 rounded-2xl border border-[#E7EAF2] bg-[linear-gradient(105deg,#FFFFFF_20%,#FFFDF9)] p-6 shadow-[0_5px_12px_rgba(16,32,74,0.07)]">
+      <div className="relative hidden h-24 w-48 shrink-0 items-center justify-center sm:flex">
+        <div className="absolute h-20 w-20 rotate-45 rounded-2xl bg-[#F8F0FF]" />
+        <div className="relative text-6xl">🔎</div>
+        <Sparkles className="absolute left-1 top-3 h-6 w-6 fill-[#FFC940] text-[#FFC940]" />
+        <Sparkles className="absolute bottom-2 right-3 h-5 w-5 fill-[#FF9CCE] text-[#FF9CCE]" />
+      </div>
+      <div>
+        <h2 className="text-lg font-extrabold text-[#10204A]">Find the secret word!</h2>
+        <p className="mt-1 text-sm leading-6 text-[#53617F]">
+          Type any word you think is related to the secret word.
+          <br />
+          The closer your word, the higher it will rank.
+          <br />
+          Can you find the perfect match?
+        </p>
+      </div>
+    </section>
+  );
+}
+
+function GuessTable({ guesses }: { guesses: Guess[] }) {
+  return (
+    <section className="mt-6 overflow-hidden rounded-2xl border border-[#E7EAF2] bg-white p-4 shadow-[0_5px_12px_rgba(16,32,74,0.07)]">
+      <h2 className="mb-3 flex items-center gap-2 text-base font-extrabold text-[#10204A]">
+        <BarChart3 className="h-5 w-5 text-[#8B5CF6]" /> How close are you?
+      </h2>
+      <div className="overflow-hidden rounded-xl border border-[#E7EAF2]">
+        <div className="grid grid-cols-[1.25fr_1.45fr_.65fr] border-b border-[#E7EAF2] bg-[#FBFCFE] px-5 py-3 text-xs font-medium uppercase tracking-wide text-[#687492]">
+          <span>Your guesses</span>
+          <span>Similarity</span>
+          <span>Heat</span>
+        </div>
+        {guesses.length ? (
+          <ScrollArea className="max-h-[330px]">
+            <div>
+              {guesses.map((guess, i) => (
+                <GuessRow key={`${guess.word}-${i}`} guess={guess} />
+              ))}
+            </div>
+          </ScrollArea>
+        ) : (
+          <div className="px-5 py-10 text-center text-sm text-[#687492]">
+            Enter a word above to make your first guess.
+          </div>
+        )}
+      </div>
+      <button className="mx-auto mt-3 flex items-center gap-2 text-xs font-semibold text-[#53617F] hover:text-[#10204A]">
+        Show more <ChevronDown className="h-4 w-4" />
+      </button>
+    </section>
+  );
+}
+
+function GuessRow({ guess }: { guess: Guess }) {
+  const heat = getHeat(guess.similarity);
+  const color = HEAT_COLORS[heat];
+  return (
+    <div className="grid grid-cols-[1.25fr_1.45fr_.65fr] items-center border-b border-[#E7EAF2] px-5 py-3 last:border-0">
+      <span className="font-semibold text-[#25355F]">{guess.word}</span>
+      <div className="flex items-center gap-3">
+        <span className="w-8 text-sm text-[#5F6D8E]">{guess.similarity}%</span>
+        <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-[#EEF0F5]">
+          <span
+            className="block h-full rounded-full"
+            style={{ width: `${guess.similarity}%`, backgroundColor: color }}
+          />
+        </span>
+      </div>
+      <span className="ml-5 flex items-center gap-2 text-sm text-[#35425F]">
+        <i className="h-3 w-3 rounded-full" style={{ backgroundColor: color }} />
+        {HEAT_LABELS[heat].replace("🔥 ", "")}
+      </span>
+    </div>
+  );
+}
+
+function TemperatureCard({ guesses }: { guesses: Guess[] }) {
+  const best = guesses.reduce((max, item) => Math.max(max, item.similarity), 0);
+  const heat = getHeat(best);
+  const label =
+    best >= 70
+      ? "Burning hot"
+      : best >= 50
+        ? "Hot"
+        : best >= 30
+          ? "Warm"
+          : best >= 15
+            ? "Cool"
+            : "Very cold";
+  return (
+    <section className="rounded-2xl border border-[#E1E6EF] bg-white p-5 shadow-[0_5px_12px_rgba(16,32,74,0.06)]">
+      <h2 className="flex items-center gap-2 font-extrabold text-[#24355F]">
+        <span className="text-xl">♨</span> Current temperature
+      </h2>
+      <div className="mt-4 flex items-center justify-between">
+        <div>
+          <p className="text-2xl font-extrabold text-[#FF6D1A]">{label}</p>
+          <p className="mt-1 text-sm text-[#62708D]">
+            {best ? "You're getting closer!" : "Make your first guess!"}
+          </p>
+        </div>
+        <div className="text-6xl">{best >= 50 ? "🌞" : "🌤️"}</div>
+      </div>
+      <div className="mt-5 h-2 rounded-full bg-[linear-gradient(90deg,#3288ED_0%,#10C6BD_27%,#FFD231_53%,#FF991C_76%,#FF5B38_100%)]">
+        <span className="relative block h-full" style={{ width: `${Math.max(3, best)}%` }}>
+          <i className="absolute -right-2 -top-1.5 h-5 w-5 rounded-full border-4 border-white bg-[#FFB700] shadow" />
+        </span>
+      </div>
+      <div className="mt-4 flex justify-between text-sm text-[#62708D]">
+        <span>Very cold</span>
+        <span>Hot</span>
+      </div>
+    </section>
+  );
+}
+
+function DailyChallengeCard() {
+  return (
+    <section className="relative overflow-hidden rounded-2xl border border-[#F1DDEB] bg-[linear-gradient(120deg,#FFFDF9,#FFF4FB)] p-5">
+      <Gift className="absolute bottom-3 right-6 h-16 w-16 text-[#7D73F5]" strokeWidth={1.4} />
+      <h2 className="flex items-center gap-2 font-extrabold text-[#24355F]">
+        <span className="text-2xl">⭐</span> Daily challenge
+      </h2>
+      <p className="mt-3 max-w-[250px] text-sm leading-6 text-[#596786]">
+        Play today's challenge and earn
+        <br />
+        <strong className="text-[#2F3D61]">50 points!</strong>
+      </p>
+    </section>
   );
 }
 
@@ -488,33 +607,48 @@ function LeaderboardPreview({ gameId }: { gameId: string }) {
   );
 
   return (
-    <div className="rounded-2xl border border-border bg-card p-5">
-      <div className="flex items-center gap-2 mb-4">
-        <Trophy className="w-4 h-4 text-primary" />
-        <h2 className="font-semibold">Top players</h2>
+    <section className="rounded-2xl border border-[#E1E6EF] bg-white p-5 shadow-[0_5px_12px_rgba(16,32,74,0.06)]">
+      <div className="mb-4 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Trophy className="h-5 w-5 text-[#FFB800]" />
+          <h2 className="font-extrabold text-[#24355F]">Top players</h2>
+        </div>
+        <Link
+          to="/hub/leaderboard"
+          className="text-sm font-semibold text-[#397AF4] hover:underline"
+        >
+          View all
+        </Link>
       </div>
       {isLoading ? (
         <p className="text-sm text-muted-foreground">Loading...</p>
       ) : lb && lb.length > 0 ? (
         <ol className="space-y-2">
           {lb.map((row, i) => (
-            <li key={row.id} className="flex items-center justify-between text-sm py-1">
+            <li key={row.id} className="flex items-center justify-between py-1 text-sm">
               <span className="flex items-center gap-3">
                 <span
-                  className={`w-5 text-xs tabular-nums ${i === 0 ? "text-yellow-400 font-bold" : i === 1 ? "text-gray-300 font-semibold" : i === 2 ? "text-amber-600 font-semibold" : "text-muted-foreground"}`}
+                  className={`flex h-6 w-6 items-center justify-center rounded-full text-xs tabular-nums ${i === 0 ? "bg-[#FFE49B] text-[#B77A00] font-bold" : i === 1 ? "bg-[#E9EDF5] text-[#687492] font-semibold" : i === 2 ? "bg-[#FFD7B8] text-[#A95A10] font-semibold" : "bg-[#F4F5F8] text-[#687492]"}`}
                 >
                   {i + 1}
                 </span>
-                <span className="truncate">{row.username ?? "anon"}</span>
+                <span className="flex h-8 w-8 items-center justify-center rounded-full border-2 border-[#7BA9FF] bg-[#FFF0C9] text-xs">
+                  🧑
+                </span>
+                <span className="max-w-36 truncate font-medium text-[#35425F]">
+                  {row.username ?? "anon"}
+                </span>
               </span>
-              <span className="font-semibold tabular-nums">{row.score.toLocaleString()}</span>
+              <span className="font-medium tabular-nums text-[#667492]">
+                {row.score.toLocaleString()}
+              </span>
             </li>
           ))}
         </ol>
       ) : (
         <p className="text-sm text-muted-foreground">No scores yet — be the first!</p>
       )}
-    </div>
+    </section>
   );
 }
 
