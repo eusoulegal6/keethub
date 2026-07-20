@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { Link, useRouterState, useNavigate } from "@tanstack/react-router";
-import { LayoutGrid, Trophy, User as UserIcon, LogOut } from "lucide-react";
+import { LayoutGrid, GraduationCap, Trophy, User as UserIcon, LogOut } from "lucide-react";
 import {
   Sidebar,
   SidebarContent,
@@ -20,6 +20,7 @@ import { useProfileStore } from "@/stores/profile-store";
 
 const navItems = [
   { title: "Library", url: "/hub", icon: LayoutGrid, exact: true },
+  { title: "Academy", url: "/hub/academy", icon: GraduationCap, exact: false },
   { title: "Leaderboard", url: "/hub/leaderboard", icon: Trophy, exact: false },
   { title: "Profile", url: "/hub/profile", icon: UserIcon, exact: false },
 ];

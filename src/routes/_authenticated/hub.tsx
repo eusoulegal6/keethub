@@ -80,6 +80,12 @@ function HubLayout() {
                 Library
               </Link>
               <Link
+                to="/hub/academy"
+                className="rounded-full px-4 py-2.5 text-sm font-extrabold text-[#52617E] transition hover:bg-[#F6F8FC]"
+              >
+                Academy
+              </Link>
+              <Link
                 to="/hub/leaderboard"
                 className="rounded-full px-4 py-2.5 text-sm font-extrabold text-[#52617E] transition hover:bg-[#F6F8FC]"
               >
