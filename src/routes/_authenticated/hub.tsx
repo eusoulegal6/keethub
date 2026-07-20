@@ -75,25 +75,30 @@ function HubLayout() {
             <nav className="hidden items-center gap-2 md:flex" aria-label="Primary navigation">
               <Link
                 to="/hub"
-                className="rounded-full bg-[#FFF0F6] px-5 py-2.5 text-sm font-extrabold text-[#FF3B8D]"
+                activeOptions={{ exact: true }}
+                activeProps={{ className: "rounded-full bg-[#FFF0F6] px-5 py-2.5 text-sm font-extrabold text-[#FF3B8D]" }}
+                inactiveProps={{ className: "rounded-full px-4 py-2.5 text-sm font-extrabold text-[#52617E] transition hover:bg-[#F6F8FC]" }}
               >
                 Library
               </Link>
               <Link
                 to="/hub/academy"
-                className="rounded-full px-4 py-2.5 text-sm font-extrabold text-[#52617E] transition hover:bg-[#F6F8FC]"
+                activeProps={{ className: "rounded-full bg-[#FFF0F6] px-5 py-2.5 text-sm font-extrabold text-[#FF3B8D]" }}
+                inactiveProps={{ className: "rounded-full px-4 py-2.5 text-sm font-extrabold text-[#52617E] transition hover:bg-[#F6F8FC]" }}
               >
                 Academy
               </Link>
               <Link
                 to="/hub/leaderboard"
-                className="rounded-full px-4 py-2.5 text-sm font-extrabold text-[#52617E] transition hover:bg-[#F6F8FC]"
+                activeProps={{ className: "rounded-full bg-[#FFF0F6] px-5 py-2.5 text-sm font-extrabold text-[#FF3B8D]" }}
+                inactiveProps={{ className: "rounded-full px-4 py-2.5 text-sm font-extrabold text-[#52617E] transition hover:bg-[#F6F8FC]" }}
               >
                 Leaderboard
               </Link>
               <Link
                 to="/hub/profile"
-                className="rounded-full px-4 py-2.5 text-sm font-extrabold text-[#52617E] transition hover:bg-[#F6F8FC]"
+                activeProps={{ className: "rounded-full bg-[#FFF0F6] px-5 py-2.5 text-sm font-extrabold text-[#FF3B8D]" }}
+                inactiveProps={{ className: "rounded-full px-4 py-2.5 text-sm font-extrabold text-[#52617E] transition hover:bg-[#F6F8FC]" }}
               >
                 Profile
               </Link>
