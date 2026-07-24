@@ -26,22 +26,6 @@ function localId(slug: string): string {
 
 export const LOCAL_GAMES: LocalGame[] = [
   {
-    slug: "ping-pong",
-    route: "/hub/games/ping-pong",
-    data: {
-      id: localId("ping-pong"),
-      slug: "ping-pong",
-      title: "Ping Pong",
-      description:
-        "Classic table tennis arcade. Challenge a friend or face the AI in a fast-paced paddle battle!",
-      category: "arcade",
-      thumbnail_url: null,
-      accent_color: "#06b6d4",
-      is_active: true,
-      created_at: new Date().toISOString(),
-    },
-  },
-  {
     slug: "semantic",
     route: "/hub/games/semantic",
     data: {

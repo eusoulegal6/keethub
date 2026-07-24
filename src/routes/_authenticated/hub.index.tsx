@@ -180,7 +180,7 @@ function mergeGames(serverGames: Game[]): Game[] {
 function getWorldForGame(game: Game): WorldKey {
   const slug = normalizeKey(game.slug);
   if (["semanteek", "semantic", "keetdash", "balderdash"].includes(slug)) return "word";
-  if (["scribble-scrattle", "paint-and-guess", "ping-pong"].includes(slug)) return "creative";
+  if (["scribble-scrattle", "paint-and-guess"].includes(slug)) return "creative";
   if (["trivia-blitz"].includes(slug)) return "quiz";
   if (["chess-blitz", "chess"].includes(slug)) return "strategy";
   const category = normalizeKey(game.category);
@@ -444,7 +444,7 @@ function LearningWorldPanel({
 function selectFeaturedGames(world: LearningWorld, games: Game[], used: Set<string>) {
   const priorities: Record<WorldKey, string[]> = {
     word: ["semanteek", "semantic", "keetdash", "balderdash"],
-    creative: ["scribble-scrattle", "paint-and-guess", "ping-pong"],
+    creative: ["scribble-scrattle", "paint-and-guess"],
     quiz: ["trivia-blitz"],
     strategy: ["chess-blitz", "chess"],
   };

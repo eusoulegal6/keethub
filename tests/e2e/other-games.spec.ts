@@ -141,45 +141,6 @@ test.describe("Other Games Smoke Tests", () => {
     }
   });
 
-  // ── Ping Pong ────────────────────────────────────────────────────────
-
-  test("ping pong renders menu and can start game", async () => {
-    const page = session!.page;
-    await page.goto("/hub/games/ping-pong");
-
-    await expect(page.getByRole("link", { name: /back to library/i })).toBeVisible({ timeout: 10_000 });
-
-    // Mode selection buttons
-    const twoPlayerBtn = page.getByRole("button", { name: "Two Player" });
-    const vsAiBtn = page.getByRole("button", { name: "VS AI" });
-    const startBtn = page.getByRole("button", { name: "Start Game" });
-
-    // At least one mode button should be visible
-    const hasTwoPlayer = await twoPlayerBtn.isVisible({ timeout: 3_000 }).catch(() => false);
-    const hasVsAi = await vsAiBtn.isVisible({ timeout: 3_000 }).catch(() => false);
-
-    if (hasTwoPlayer) {
-      await twoPlayerBtn.click();
-    } else if (hasVsAi) {
-      await vsAiBtn.click();
-    }
-
-    // Start the game
-    if (await startBtn.isVisible({ timeout: 3_000 }).catch(() => false)) {
-      await startBtn.click();
-      await page.waitForTimeout(1_000);
-
-      // Canvas should be visible (could also just be the score display)
-      await expect(page.getByText(/p1|player 1|you/i).first()).toBeVisible({ timeout: 5_000 });
-
-      // Quit button should be available
-      const quitBtn = page.getByRole("button", { name: /quit/i });
-      if (await quitBtn.isVisible({ timeout: 2_000 }).catch(() => false)) {
-        await quitBtn.click();
-      }
-    }
-  });
-
   // ── Catch-all placeholder ────────────────────────────────────────────
 
   test("catch-all game route renders placeholder for unknown games", async () => {
