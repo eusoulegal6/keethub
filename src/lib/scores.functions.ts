@@ -2,7 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { createClient } from "@supabase/supabase-js";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import type { Database } from "@/integrations/supabase/types";
+import type { Database, Json } from "@/integrations/supabase/types";
 
 function publicClient() {
   return createClient<Database>(process.env.SUPABASE_URL!, process.env.SUPABASE_PUBLISHABLE_KEY!, {
@@ -14,13 +14,27 @@ function publicClient() {
   });
 }
 
+/** Aggregated standing returned by the server-side get_leaderboard_standings RPC. */
+export interface LeaderboardStanding {
+  user_id: string;
+  username: string | null;
+  avatar_config: Json | null;
+  total_score: number;
+  submissions: number;
+  best_game_title: string | null;
+  best_game_slug: string | null;
+  best_score: number | null;
+  last_played_at: string;
+}
+
+/** Individual score row — used by per-game leaderboards and as an intermediate type. */
 export interface LeaderboardEntry {
   id: string;
   score: number;
   created_at: string;
   user_id: string;
   username: string | null;
-  avatar_config: unknown;
+  avatar_config: Json | null;
   game_slug: string;
   game_title: string;
 }
@@ -31,7 +45,7 @@ type GlobalScoreRow = {
   created_at: string;
   user_id: string;
   games: { slug: string | null; title: string | null } | null;
-  profiles: { username: string | null; avatar_config: unknown } | null;
+  profiles: { username: string | null; avatar_config: Json | null } | null;
 };
 
 type GameScoreRow = {
@@ -42,45 +56,43 @@ type GameScoreRow = {
   profiles: { username: string | null } | null;
 };
 
-export const getGlobalLeaderboard = createServerFn({ method: "GET" }).handler(async () => {
-  console.log("[Leaderboard:getGlobalLeaderboard] fetching rows", {
-    hasSupabaseUrl: Boolean(process.env.SUPABASE_URL),
-    hasPublishableKey: Boolean(process.env.SUPABASE_PUBLISHABLE_KEY),
-    limit: 100,
-  });
-
-  const supabase = publicClient();
-  const { data, error } = await supabase
-    .from("game_scores")
-    .select("id, score, created_at, user_id, games(slug, title), profiles(username, avatar_config)")
-    .order("score", { ascending: false })
-    .limit(100);
-  if (error) {
-    console.error("[Leaderboard:getGlobalLeaderboard] Supabase query failed", {
-      message: error.message,
-      code: error.code,
-      details: error.details,
-      hint: error.hint,
+export const getGlobalLeaderboard = createServerFn({ method: "GET" })
+  .inputValidator((input) =>
+    z
+      .object({
+        days: z.number().int().positive().nullable().optional(),
+        limit: z.number().int().min(1).max(500).optional(),
+      })
+      .optional()
+      .default({})
+      .parse(input),
+  )
+  .handler(async ({ data }) => {
+    const supabase = publicClient();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const rpcClient = supabase.rpc as any;
+    const { data: standings, error } = await rpcClient("get_leaderboard_standings", {
+      p_days: data.days ?? null,
+      p_limit: data.limit ?? 100,
     });
-    throw new Error(error.message);
-  }
 
-  console.log("[Leaderboard:getGlobalLeaderboard] fetched rows", {
-    rowCount: data?.length ?? 0,
-    firstRow: data?.[0] ?? null,
+    if (error) {
+      console.error("[Leaderboard:getGlobalLeaderboard] RPC failed", {
+        message: error.message,
+        code: error.code,
+        details: error.details,
+        hint: error.hint,
+      });
+      throw new Error(error.message);
+    }
+
+    const result = (standings ?? []) as LeaderboardStanding[];
+    console.log("[Leaderboard:getGlobalLeaderboard] fetched standings", {
+      count: result.length,
+    });
+
+    return result;
   });
-
-  return ((data ?? []) as unknown as GlobalScoreRow[]).map((row) => ({
-    id: row.id,
-    score: row.score,
-    created_at: row.created_at,
-    user_id: row.user_id,
-    username: row.profiles?.username ?? null,
-    avatar_config: row.profiles?.avatar_config ?? null,
-    game_slug: row.games?.slug ?? "",
-    game_title: row.games?.title ?? "",
-  }));
-});
 
 export const getGameLeaderboard = createServerFn({ method: "GET" })
   .inputValidator((input) => z.object({ gameId: z.string().uuid() }).parse(input))
@@ -114,6 +126,15 @@ export const submitScore = createServerFn({ method: "POST" })
       .parse(input),
   )
   .handler(async ({ data, context }) => {
+    const { data: game, error: gameError } = await context.supabase
+      .from("games")
+      .select("id")
+      .eq("id", data.gameId)
+      .maybeSingle();
+
+    if (gameError) throw new Error(gameError.message);
+    if (!game) throw new Error("Game not found");
+
     const { error } = await context.supabase.from("game_scores").insert({
       user_id: context.userId,
       game_id: data.gameId,
