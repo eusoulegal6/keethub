@@ -211,7 +211,7 @@ export function ChessBoard({
   });
 
   return (
-    <div style={{ touchAction: "none", userSelect: "none" }}>
+    <div className="chess-room-board" style={{ touchAction: "none", userSelect: "none" }}>
       {/* Top file labels (adjacent to rank 8: a8=light, h8=dark) */}
       <div style={{ display: "flex", paddingLeft: Math.max(14, squareSize * 0.25) }}>
         {files.map((f, i) => (
@@ -239,10 +239,10 @@ export function ChessBoard({
             gridTemplateRows: `repeat(8, ${squareSize}px)`,
             width: boardPx,
             height: boardPx,
-            border: "2px solid #374151",
-            borderRadius: 4,
+            border: "3px solid #9a5b2a",
+            borderRadius: 8,
             overflow: "hidden",
-            boxShadow: "0 4px 12px rgba(0,0,0,0.3)",
+            boxShadow: "0 4px 12px rgba(87,45,18,0.34)",
           }}
         >
           {squares}

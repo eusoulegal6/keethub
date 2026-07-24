@@ -14,6 +14,9 @@ import {
   Crown,
   Play,
   Swords,
+  Gamepad2,
+  Sparkles,
+  BarChart3,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useState, useEffect, useRef } from "react";
@@ -69,36 +72,29 @@ export const Route = createFileRoute("/_authenticated/hub/games/chess")({
 
 function ChessPage() {
   const { game } = Route.useLoaderData();
-  const accent = game.accent_color ?? "#a78bfa";
   const [tab, setTab] = useState("play");
 
   return (
-    <div className="px-4 py-4 md:px-10 md:py-6 max-w-6xl mx-auto">
-      <Link
-        to="/hub"
-        className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground mb-4"
-      >
-        <ArrowLeft className="w-4 h-4" />
-        Back to library
+    <div className="chess-room px-3 pb-10 pt-0 md:px-5">
+      <Link to="/hub" className="chess-room-back">
+        <ArrowLeft className="h-4 w-4" /> Back to library
       </Link>
-
-      <div
-        className="rounded-2xl border border-border p-6 md:p-8 mb-6 text-center relative overflow-hidden"
-        style={{
-          background: `radial-gradient(circle at 30% 20%, ${accent}25, transparent 55%), linear-gradient(135deg, ${accent}10, oklch(0.20 0.03 268))`,
-        }}
-      >
-        <Badge variant="secondary" className="mb-3">
-          {game.category}
-        </Badge>
-        <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight mb-2">{game.title}</h1>
-        <p className="text-muted-foreground text-sm max-w-lg mx-auto">{game.description}</p>
-      </div>
+      <section className="chess-room-hero">
+        <div className="chess-room-spark spark-one">✦</div>
+        <div className="chess-room-spark spark-two">♥</div>
+        <div className="chess-room-piece chess-room-queen">♕</div>
+        <div className="chess-room-bird">🐦</div>
+        <div className="chess-room-knight">♘</div>
+        <div className="chess-room-pawn">♟</div>
+        <Badge className="chess-room-category">{game.category}</Badge>
+        <h1>{game.title}</h1>
+        <p>Challenge friends or practice your strategy with fun bots.<br />Every move is a step toward mastery! <Sparkles className="inline h-4 w-4 text-[#ffb21a]" /></p>
+      </section>
 
       <Tabs value={tab} onValueChange={setTab} className="w-full">
-        <TabsList className="grid w-full max-w-sm grid-cols-3 mb-6">
+        <TabsList className="chess-room-tabs grid w-full max-w-[535px] grid-cols-3 mb-3">
           <TabsTrigger value="play" className="gap-2">
-            <Users className="w-4 h-4" /> Play
+            <Gamepad2 className="w-4 h-4" /> Play
           </TabsTrigger>
           <TabsTrigger value="puzzles" className="gap-2">
             <Puzzle className="w-4 h-4" /> Puzzles
@@ -110,7 +106,7 @@ function ChessPage() {
 
         <TabsContent value="play">
           <ChessProvider>
-            <PlayTab gameId={game.id} accent={accent} />
+            <PlayTab gameId={game.id} />
           </ChessProvider>
         </TabsContent>
 
@@ -134,7 +130,7 @@ function ChessPage() {
 
 // ── Play tab ──────────────────────────────────────────────────────
 
-function PlayTab({ gameId, accent }: { gameId: string; accent: string }) {
+function PlayTab({ gameId }: { gameId: string }) {
   const { game, makeMove, aiConfig, setAIConfig, resetGame, isAIThinking, isAITurn, makeAIMove } =
     useChess();
   const queryClient = useQueryClient();
@@ -244,14 +240,17 @@ function PlayTab({ gameId, accent }: { gameId: string; accent: string }) {
 
   return (
     <div>
-      {/* Mode selector + Bot grid (when AI not started) */}
+      {/* Mode selector + Bot grid */}
       {!aiConfig.enabled && (
-        <Card className="mb-4">
-          <CardContent className="p-4">
-            <div className="flex gap-2 mb-4">
+        <Card className="chess-room-setup mb-3">
+          <CardContent className="p-3 md:p-4">
+            <div className="chess-room-setup-grid">
+              <div className="chess-room-mode-area">
+              <div className="flex gap-2 mb-5">
               <Button
                 size="sm"
                 variant={mode === "local" ? "default" : "outline"}
+                className="chess-room-mode-button"
                 onClick={() => handleSetMode("local")}
               >
                 <Users className="w-4 h-4 mr-1" /> Two Player
@@ -259,34 +258,19 @@ function PlayTab({ gameId, accent }: { gameId: string; accent: string }) {
               <Button
                 size="sm"
                 variant={mode === "ai" ? "default" : "outline"}
+                className="chess-room-mode-button"
                 onClick={() => handleSetMode("ai")}
               >
                 <Bot className="w-4 h-4 mr-1" /> VS AI
               </Button>
-              {mode === "local" && !isMobile && (
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  className="ml-auto"
-                  onClick={() => {
-                    setScoreSubmitted(false);
-                    resetGame();
-                  }}
-                >
-                  <RotateCcw className="w-4 h-4 mr-1" /> New Game
-                </Button>
-              )}
             </div>
-
-            {mode === "ai" && (
-              <>
-                {/* Category tabs */}
-                <div className="flex gap-1 mb-3 overflow-x-auto pb-1">
+              <p className="chess-room-label">Choose difficulty</p>
+              <div className="flex gap-1 overflow-x-auto pb-1">
                   {Object.keys(OPPONENTS).map((cat) => (
                     <button
                       key={cat}
                       onClick={() => setBotCategory(cat)}
-                      className={`px-3 py-1.5 text-xs font-medium rounded-full border transition whitespace-nowrap ${
+                      className={`chess-room-difficulty px-3 py-1.5 text-xs font-bold rounded-full border transition whitespace-nowrap ${
                         botCategory === cat
                           ? "bg-primary text-primary-foreground border-primary"
                           : "border-border text-muted-foreground hover:text-foreground"
@@ -296,24 +280,24 @@ function PlayTab({ gameId, accent }: { gameId: string; accent: string }) {
                     </button>
                   ))}
                 </div>
+              </div>
 
-                {/* Bot grid */}
-                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2 mb-3">
+                <div className="chess-room-opponents grid grid-cols-1 min-[520px]:grid-cols-3 gap-3">
                   {OPPONENTS[botCategory].map((opp) => {
                     const isSelected = selectedOpponent?.id === opp.id;
                     return (
                       <button
                         key={opp.id}
                         onClick={() => handleSelectOpponent(opp)}
-                        className={`relative p-3 rounded-xl border-2 transition-all text-left ${
+                      className={`relative p-3 rounded-xl border-2 transition-all text-center ${
                           isSelected
                             ? "border-primary bg-primary/10 ring-1 ring-primary/50"
                             : "border-border hover:border-primary/40 hover:bg-secondary/50"
                         }`}
                       >
-                        <div className="flex items-center gap-3">
-                          <div className="relative flex-shrink-0">
-                            <Avatar className="w-10 h-10">
+                        <div className="flex flex-col items-center">
+                          <div className="relative flex-shrink-0 mb-1">
+                            <Avatar className="h-14 w-14">
                               <AvatarImage src={opp.avatar} alt={opp.name} />
                               <AvatarFallback className="text-xs">{opp.name[0]}</AvatarFallback>
                             </Avatar>
@@ -323,7 +307,7 @@ function PlayTab({ gameId, accent }: { gameId: string; accent: string }) {
                           </div>
                           <div className="min-w-0 flex-1">
                             <p className="text-sm font-medium truncate">{opp.name}</p>
-                            <p className="text-xs text-muted-foreground">{opp.rating}</p>
+                            <p className="text-xs text-[#ff9418] font-bold"><BarChart3 className="inline h-3 w-3" /> {opp.rating}</p>
                           </div>
                         </div>
                         <p className="text-xs text-muted-foreground mt-2 line-clamp-2 leading-relaxed">
@@ -333,18 +317,15 @@ function PlayTab({ gameId, accent }: { gameId: string; accent: string }) {
                     );
                   })}
                 </div>
-
-                {/* Start button */}
+              </div>
                 <Button
                   onClick={handleStartAI}
                   disabled={!selectedOpponent}
-                  className="w-full glow-primary"
+                  className="chess-room-start w-full"
                 >
                   <Play className="w-4 h-4 mr-1" fill="currentColor" />
                   {selectedOpponent ? `Play vs ${selectedOpponent.name}` : "Choose an opponent"}
                 </Button>
-              </>
-            )}
           </CardContent>
         </Card>
       )}
@@ -371,12 +352,14 @@ function PlayTab({ gameId, accent }: { gameId: string; accent: string }) {
       )}
 
       {/* Board area */}
-      <div className={`grid ${isMobile ? "grid-cols-1" : "grid-cols-3"} gap-4`}>
+      <div className={`chess-room-game grid ${isMobile ? "grid-cols-1" : "grid-cols-3"} gap-3`}>
         <div className={isMobile ? "" : "col-span-2"}>
+          <div className="chess-room-board-card">
           <div className="flex justify-between items-center mb-2 px-1">
             <Button
               variant="ghost"
               size="sm"
+              className="chess-room-flip"
               onClick={() => setOrientation((o) => (o === "white" ? "black" : "white"))}
             >
               Flip board
@@ -408,6 +391,7 @@ function PlayTab({ gameId, accent }: { gameId: string; accent: string }) {
             squareSize={isMobile ? Math.min(44, Math.floor((window.innerWidth - 48) / 8)) : 64}
             lastMove={game.lastMove}
           />
+          </div>
         </div>
         {!isMobile && (
           <div className="col-span-1">
