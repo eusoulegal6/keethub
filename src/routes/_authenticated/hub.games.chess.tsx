@@ -13,6 +13,7 @@ import {
   RotateCcw,
   Crown,
   Play,
+  Swords,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useState, useEffect, useRef } from "react";
@@ -31,6 +32,9 @@ import type { Puzzle as ChessPuzzle } from "@/lib/chess/types";
 import { PUZZLES } from "@/lib/chess/puzzles";
 import { OPPONENTS, CATEGORY_LABELS, getOpponentById, type Opponent } from "@/lib/chess/opponents";
 import { LOCAL_GAMES } from "@/lib/local-games";
+import { useChessMultiplayer } from "@/games/chess/hooks/useChessMultiplayer";
+import MultiplayerLobby from "@/games/chess/components/MultiplayerLobby";
+import MultiplayerGame from "@/games/chess/components/MultiplayerGame";
 
 // ── Route ─────────────────────────────────────────────────────────
 
@@ -92,12 +96,15 @@ function ChessPage() {
       </div>
 
       <Tabs value={tab} onValueChange={setTab} className="w-full">
-        <TabsList className="grid w-full max-w-xs grid-cols-2 mb-6">
+        <TabsList className="grid w-full max-w-sm grid-cols-3 mb-6">
           <TabsTrigger value="play" className="gap-2">
             <Users className="w-4 h-4" /> Play
           </TabsTrigger>
           <TabsTrigger value="puzzles" className="gap-2">
             <Puzzle className="w-4 h-4" /> Puzzles
+          </TabsTrigger>
+          <TabsTrigger value="multiplayer" className="gap-2">
+            <Swords className="w-4 h-4" /> Multiplayer
           </TabsTrigger>
         </TabsList>
 
@@ -111,6 +118,10 @@ function ChessPage() {
           <PuzzleProvider>
             <PuzzlesTab />
           </PuzzleProvider>
+        </TabsContent>
+
+        <TabsContent value="multiplayer">
+          <MultiplayerTab gameId={game.id} />
         </TabsContent>
       </Tabs>
 
@@ -405,6 +416,92 @@ function PlayTab({ gameId, accent }: { gameId: string; accent: string }) {
         )}
       </div>
     </div>
+  );
+}
+
+// ── Multiplayer tab ────────────────────────────────────────────────
+
+function MultiplayerTab({ gameId }: { gameId: string }) {
+  const mp = useChessMultiplayer();
+  const queryClient = useQueryClient();
+  const submitScoreFn = useServerFn(submitScore);
+  const submittedRoomRef = useRef<string | null>(null);
+
+  const isInRoom = mp.roomState !== null;
+  const isPlaying = mp.roomState?.room.status === "playing";
+
+  // Auto-submit score on game finish
+  useEffect(() => {
+    const roomState = mp.roomState;
+    if (!roomState || roomState.room.status !== "finished") return;
+    if (submittedRoomRef.current === roomState.room.id) return;
+
+    const selfPlayer = roomState.players.find((p) => p.id === roomState.selfPlayerId);
+    if (!selfPlayer) return;
+    const won = roomState.room.result === "white_win" || roomState.room.result === "resign_black"
+      ? selfPlayer.color === "white"
+      : roomState.room.result === "black_win" || roomState.room.result === "resign_white"
+        ? selfPlayer.color === "black"
+        : false;
+
+    submittedRoomRef.current = roomState.room.id;
+
+    void (async () => {
+      try {
+        await submitScoreFn({
+          data: {
+            gameId,
+            score: won ? roomState.moves.length : 0,
+            metadata: {
+              roomId: roomState.room.id,
+              roomCode: roomState.room.code,
+              result: roomState.room.result,
+              color: selfPlayer.color,
+              opponentName: roomState.players.find((p) => p.id !== selfPlayer.id)?.name,
+            },
+          },
+        });
+        queryClient.invalidateQueries({ queryKey: ["game-leaderboard", gameId] });
+        queryClient.invalidateQueries({ queryKey: ["global-leaderboard"] });
+        toast.success("Score submitted!");
+      } catch {
+        submittedRoomRef.current = null;
+      }
+    })();
+  }, [gameId, mp.roomState, submitScoreFn, queryClient]);
+
+  const mpActions = {
+    state: mp.roomState,
+    action: mp.action,
+    onCreateRoom: mp.createRoom,
+    onJoinRoom: mp.joinRoom,
+    onLeaveRoom: mp.leaveRoom,
+    onStartGame: mp.startGame,
+  };
+
+  if (isPlaying) {
+    return (
+      <MultiplayerGame
+        state={mp.roomState!}
+        action={mp.action}
+        isMyTurn={mp.isMyTurn}
+        lastMove={mp.lastMove}
+        onMove={mp.makeMove}
+        onResign={mp.resign}
+        onLeave={mp.leaveRoom}
+      />
+    );
+  }
+
+  return (
+    <MultiplayerLobby
+      state={mp.roomState}
+      action={mp.action}
+      onCreateRoom={mp.createRoom}
+      onJoinRoom={mp.joinRoom}
+      onLeaveRoom={mp.leaveRoom}
+      onStartGame={mp.startGame}
+    />
   );
 }
 
