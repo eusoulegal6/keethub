@@ -168,10 +168,16 @@ export const Route = createFileRoute("/_authenticated/hub/")({
   component: LearningWorldsPage,
 });
 
+const EXCLUDED_SLUGS = new Set([
+  "neon-runner",
+  "void-fleet",
+]);
+
 function mergeGames(serverGames: Game[]): Game[] {
-  const seen = new Set(serverGames.map((game) => game.slug));
+  const filtered = serverGames.filter((game) => !EXCLUDED_SLUGS.has(game.slug));
+  const seen = new Set(filtered.map((game) => game.slug));
   return [
-    ...serverGames,
+    ...filtered,
     ...LOCAL_GAMES.filter((game) => !seen.has(game.slug)).map((game) => game.data),
   ];
 }
