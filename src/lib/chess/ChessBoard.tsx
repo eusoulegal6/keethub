@@ -5,6 +5,7 @@ import { ChessPiece } from "./chessPieces";
 
 const LIGHT = "#f0d9b5";
 const DARK = "#b58863";
+const COORD_COLOR = "#6b7280"; // gray-500
 
 function getSquareName(row: number, col: number): string {
   return `${String.fromCharCode(97 + col)}${8 - row}`;
@@ -19,8 +20,6 @@ interface SquareProps {
   isLegalMove: boolean;
   isLastMove: boolean;
   bg: string;
-  showRank: boolean;
-  showFile: boolean;
   orientation: "white" | "black";
   disabled: boolean;
   sqSize: number;
@@ -28,20 +27,7 @@ interface SquareProps {
 }
 
 const ChessSquare = memo(
-  ({
-    name,
-    piece,
-    isSelected,
-    isLegalMove,
-    isLastMove,
-    bg,
-    showRank,
-    showFile,
-    orientation,
-    disabled,
-    sqSize,
-    onClick,
-  }: SquareProps) => {
+  ({ name, piece, isSelected, isLegalMove, isLastMove, bg, orientation, disabled, sqSize, onClick }: SquareProps) => {
     return (
       <div
         onClick={onClick}
@@ -59,38 +45,6 @@ const ChessSquare = memo(
           transition: "background-color 0.15s",
         }}
       >
-        {showRank && (
-          <span
-            style={{
-              position: "absolute",
-              left: 2,
-              top: 2,
-              fontSize: Math.max(8, sqSize * 0.18),
-              fontWeight: 600,
-              color: bg === LIGHT ? "#b58863" : "#f0d9b5",
-              pointerEvents: "none",
-              lineHeight: 1,
-            }}
-          >
-            {name[1]}
-          </span>
-        )}
-        {showFile && (
-          <span
-            style={{
-              position: "absolute",
-              bottom: 2,
-              right: 2,
-              fontSize: Math.max(8, sqSize * 0.18),
-              fontWeight: 600,
-              color: bg === LIGHT ? "#b58863" : "#f0d9b5",
-              pointerEvents: "none",
-              lineHeight: 1,
-            }}
-          >
-            {name[0]}
-          </span>
-        )}
         {piece && <ChessPiece piece={piece} size={sqSize} />}
         {isLegalMove && !piece && (
           <div
@@ -132,7 +86,6 @@ export function ChessBoard({
   const [selected, setSelected] = useState<string | null>(null);
   const [legalMoves, setLegalMoves] = useState<string[]>([]);
 
-  // Keep mutable refs so handleClick is stable and memo works
   const selectedRef = useRef(selected);
   selectedRef.current = selected;
   const legalRef = useRef(legalMoves);
@@ -142,18 +95,13 @@ export function ChessBoard({
   const disabledRef = useRef(disabled);
   disabledRef.current = disabled;
 
-  // Reset selection when fen changes
   useEffect(() => {
     setSelected(null);
     setLegalMoves([]);
   }, [fen]);
 
   const game = useMemo(() => {
-    try {
-      return new Chess(fen);
-    } catch {
-      return new Chess();
-    }
+    try { return new Chess(fen); } catch { return new Chess(); }
   }, [fen]);
 
   const pieceMap = useMemo(() => {
@@ -167,7 +115,6 @@ export function ChessBoard({
     return m;
   }, [game.fen(), game]);
 
-  // Stable click handler — always reads latest state from refs
   const handleClick = useCallback(
     (sq: string) => {
       if (disabledRef.current) return;
@@ -202,16 +149,10 @@ export function ChessBoard({
     [pieceMap, game],
   );
 
-  // Per-square click callbacks — rebuilt when handleClick changes
-  const clickCallbacks = useMemo(() => {
-    const map: Record<string, () => void> = {};
-    return map;
-  }, [handleClick]);
+  const clickCallbacks = useMemo(() => ({} as Record<string, () => void>), [handleClick]);
   const getSquareClick = useCallback(
     (sq: string) => {
-      if (!clickCallbacks[sq]) {
-        clickCallbacks[sq] = () => handleClick(sq);
-      }
+      if (!clickCallbacks[sq]) clickCallbacks[sq] = () => handleClick(sq);
       return clickCallbacks[sq];
     },
     [handleClick, clickCallbacks],
@@ -234,8 +175,6 @@ export function ChessBoard({
             isLegalMove={legalMoves.includes(sq)}
             isLastMove={lastMove?.from === sq || lastMove?.to === sq}
             bg={isLight ? LIGHT : DARK}
-            showRank={orientation === "white" ? sq[1] === "1" : sq[1] === "8"}
-            showFile={orientation === "white" ? sq[0] === "a" : sq[0] === "h"}
             orientation={orientation}
             disabled={disabled}
             sqSize={squareSize}
@@ -248,25 +187,84 @@ export function ChessBoard({
   }, [pieceMap, selected, legalMoves, lastMove, orientation, disabled, squareSize, getSquareClick]);
 
   const boardPx = squareSize * 8;
+  const labelSize = Math.max(9, squareSize * 0.2);
+
+  // Coordinate labels
+  const files = orientation === "white"
+    ? ["a", "b", "c", "d", "e", "f", "g", "h"]
+    : ["h", "g", "f", "e", "d", "c", "b", "a"];
+  const ranks = orientation === "white"
+    ? ["8", "7", "6", "5", "4", "3", "2", "1"]
+    : ["1", "2", "3", "4", "5", "6", "7", "8"];
+
+  const labelStyle = (isLightSquare: boolean): React.CSSProperties => ({
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    width: squareSize,
+    height: Math.max(12, squareSize * 0.25),
+    fontSize: labelSize,
+    fontWeight: 600,
+    color: isLightSquare ? DARK : LIGHT,
+    lineHeight: 1,
+    userSelect: "none",
+  });
 
   return (
-    <div
-      style={{ touchAction: "none", userSelect: "none", display: "flex", justifyContent: "center" }}
-    >
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: `repeat(8, ${squareSize}px)`,
-          gridTemplateRows: `repeat(8, ${squareSize}px)`,
-          width: boardPx,
-          height: boardPx,
-          border: "2px solid #374151",
-          borderRadius: 4,
-          overflow: "hidden",
-          boxShadow: "0 4px 12px rgba(0,0,0,0.3)",
-        }}
-      >
-        {squares}
+    <div style={{ touchAction: "none", userSelect: "none" }}>
+      {/* Top file labels (adjacent to rank 8: a8=light, h8=dark) */}
+      <div style={{ display: "flex", paddingLeft: Math.max(14, squareSize * 0.25) }}>
+        {files.map((f, i) => (
+          <div key={`top-${f}`} style={labelStyle(i % 2 === 0)}>
+            {f}
+          </div>
+        ))}
+      </div>
+
+      <div style={{ display: "flex" }}>
+        {/* Left rank labels (adjacent to a-file: a8=light, a7=dark, ...) */}
+        <div style={{ display: "flex", flexDirection: "column" }}>
+          {ranks.map((r, i) => (
+            <div key={`left-${r}`} style={{ ...labelStyle(i % 2 === 0), width: Math.max(14, squareSize * 0.25), height: squareSize }}>
+              {r}
+            </div>
+          ))}
+        </div>
+
+        {/* The board */}
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: `repeat(8, ${squareSize}px)`,
+            gridTemplateRows: `repeat(8, ${squareSize}px)`,
+            width: boardPx,
+            height: boardPx,
+            border: "2px solid #374151",
+            borderRadius: 4,
+            overflow: "hidden",
+            boxShadow: "0 4px 12px rgba(0,0,0,0.3)",
+          }}
+        >
+          {squares}
+        </div>
+
+        {/* Right rank labels (adjacent to h-file: h8=dark, h7=light, ...) */}
+        <div style={{ display: "flex", flexDirection: "column" }}>
+          {ranks.map((r, i) => (
+            <div key={`right-${r}`} style={{ ...labelStyle(i % 2 === 1), width: Math.max(14, squareSize * 0.25), height: squareSize }}>
+              {r}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Bottom file labels (adjacent to rank 1: a1=dark, h1=light) */}
+      <div style={{ display: "flex", paddingLeft: Math.max(14, squareSize * 0.25) }}>
+        {files.map((f, i) => (
+          <div key={`bot-${f}`} style={labelStyle(i % 2 === 1)}>
+            {f}
+          </div>
+        ))}
       </div>
     </div>
   );
