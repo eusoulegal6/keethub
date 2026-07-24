@@ -25,7 +25,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { supabase } from "@/integrations/supabase/client";
-import { getGlobalLeaderboard, type LeaderboardEntry } from "@/lib/scores.functions";
+import { getGlobalLeaderboard, type LeaderboardStanding } from "@/lib/scores.functions";
 import { useAuth } from "@/hooks/use-auth";
 import { getAvatarUrlFromProfile } from "@/lib/avatar/url";
 import { cn } from "@/lib/utils";
@@ -453,16 +453,14 @@ function StudentDashboardPreview({
   const avatarUrl = user ? getAvatarUrlFromProfile(avatarConfig) : null;
 
   // Pull real score from leaderboard for this user
-  const { data: leaderboardRows = [] } = useQuery({
+  const { data: standings = [] } = useQuery({
     queryKey: ["landing-user-score", user?.id],
-    queryFn: () => getGlobalLeaderboard(),
+    queryFn: () => getGlobalLeaderboard({ data: { limit: 200 } }),
     enabled: isAuthenticated && !!user?.id,
     staleTime: 60_000,
-  });
+  }) as { data: LeaderboardStanding[] };
   const userScore = isAuthenticated && user
-    ? leaderboardRows
-        .filter((r) => r.user_id === user.id)
-        .reduce((sum, r) => sum + r.score, 0)
+    ? standings.find((s) => s.user_id === user.id)?.total_score ?? null
     : null;
 
   if (!isAuthenticated) {
@@ -522,7 +520,7 @@ function StudentDashboardPreview({
             />
             <SummaryTile
               icon={Gamepad2}
-              value={leaderboardRows.filter((r) => r.user_id === user?.id).length.toString()}
+              value={(standings.find((s) => s.user_id === user?.id)?.submissions ?? 0).toString()}
               label="Scores"
               color="text-[#11BFC4]"
             />
@@ -739,11 +737,17 @@ function LeaderboardPreview() {
     isLoading,
   } = useQuery({
     queryKey: ["landing-global-leaderboard"],
-    queryFn: () => getGlobalLeaderboard(),
+    queryFn: () => getGlobalLeaderboard({ data: { limit: 5 } }),
     enabled: typeof window !== "undefined",
     staleTime: 60_000,
-  });
-  const rows = buildLandingStandings(data).slice(0, 5);
+  }) as { data: LeaderboardStanding[]; isError: boolean; isLoading: boolean };
+  const rows: LandingStanding[] = data.map((s, i) => ({
+    rank: i + 1,
+    userId: s.user_id,
+    name: s.username?.trim() || "Anonymous player",
+    level: Math.max(1, Math.min(99, Math.round(s.total_score / 250))),
+    score: s.total_score,
+  }));
 
   return (
     <Card className="pk-reveal pk-delay-1 relative overflow-hidden rounded-lg border-[#E9EEF8] bg-white/[0.92] p-5 text-[#10204A] shadow-[0_12px_34px_rgba(49,64,106,0.08)] sm:p-6">
@@ -946,29 +950,6 @@ function ParakeetMascot({ className }: { className?: string }) {
   );
 }
 
-function buildLandingStandings(rows: LeaderboardEntry[]): LandingStanding[] {
-  const totals = new Map<string, { name: string; score: number }>();
-
-  for (const row of rows) {
-    const current = totals.get(row.user_id);
-    const name = row.username?.trim() || "Anonymous player";
-    if (!current) {
-      totals.set(row.user_id, { name, score: row.score });
-      continue;
-    }
-    current.score += row.score;
-  }
-
-  return Array.from(totals.entries())
-    .map(([userId, value]) => ({
-      userId,
-      name: value.name,
-      score: value.score,
-      level: Math.max(1, Math.min(99, Math.round(value.score / 250))),
-    }))
-    .sort((a, b) => b.score - a.score)
-    .map((standing, index) => ({ ...standing, rank: index + 1 }));
-}
 
 function getInitials(name: string) {
   return name

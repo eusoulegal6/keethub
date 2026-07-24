@@ -2,9 +2,10 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { queryOptions, useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import { CalendarDays, ChevronDown, ChevronRight, Sparkles, Star, Trophy } from "lucide-react";
-import { getGlobalLeaderboard, type LeaderboardEntry } from "@/lib/scores.functions";
+import { getGlobalLeaderboard, type LeaderboardStanding } from "@/lib/scores.functions";
 import { getAvatarUrlFromProfile } from "@/lib/avatar/url";
 import { useAuth } from "@/hooks/use-auth";
+import type { Json } from "@/integrations/supabase/types";
 
 type DateRange = {
   label: string;
@@ -16,7 +17,7 @@ type PlayerStanding = {
   rank: number;
   userId: string;
   name: string;
-  avatarConfig: unknown;
+  avatarConfig: Json | null;
   score: number;
   bestGameTitle: string;
   bestGameSlug: string;
@@ -24,10 +25,13 @@ type PlayerStanding = {
   lastPlayedAt: string;
 };
 
-const leaderboardQuery = queryOptions({
-  queryKey: ["global-leaderboard"],
-  queryFn: () => getGlobalLeaderboard(),
-});
+function leaderboardQueryOptions(days: number | null, limit: number) {
+  return queryOptions({
+    queryKey: ["global-leaderboard", { days, limit }],
+    queryFn: () => getGlobalLeaderboard({ data: { days, limit } }),
+    staleTime: 60_000,
+  });
+}
 
 const dateRanges: DateRange[] = [
   { label: "All time", note: "Every recorded score", days: null },
@@ -93,20 +97,31 @@ export const Route = createFileRoute("/_authenticated/hub/leaderboard")({
 
 function LeaderboardPage() {
   const { user } = useAuth();
-  const {
-    data: rows = [],
-    error,
-    isError,
-    isFetching,
-    isLoading,
-    status,
-  } = useQuery(leaderboardQuery);
   const [selectedRangeIndex, setSelectedRangeIndex] = useState(0);
   const [rangeMenuOpen, setRangeMenuOpen] = useState(false);
   const [selectedRank, setSelectedRank] = useState(1);
 
   const selectedRange = dateRanges[selectedRangeIndex] ?? dateRanges[0];
-  const standings = useMemo(() => buildStandings(rows, selectedRange), [rows, selectedRange]);
+  const {
+    data: serverStandings = [],
+    error,
+    isError,
+    isFetching,
+    isLoading,
+    status,
+  } = useQuery(leaderboardQueryOptions(selectedRange.days, 100)) as {
+    data: LeaderboardStanding[];
+    error: Error | null;
+    isError: boolean;
+    isFetching: boolean;
+    isLoading: boolean;
+    status: string;
+  };
+
+  const standings = useMemo(
+    () => serverStandings.map((s, i) => toPlayerStanding(s, i + 1)),
+    [serverStandings],
+  );
   const selectedStanding =
     standings.find((standing) => standing.rank === selectedRank) ?? standings[0] ?? null;
   const yourStanding = standings.find((standing) => standing.userId === user?.id) ?? null;
@@ -114,45 +129,30 @@ function LeaderboardPage() {
   const tableRows = standings.slice(3, 10);
 
   useEffect(() => {
-    const querySnapshot = {
+    console.log("[Leaderboard] query snapshot", {
       status,
       isLoading,
       isFetching,
       isError,
       errorMessage: error ? getErrorMessage(error) : null,
-      rawRowCount: rows.length,
-      rawRows: rows,
-    };
-
-    console.log("[Leaderboard] global leaderboard query", querySnapshot);
-
+      standingsCount: serverStandings.length,
+      selectedRange,
+    });
     if (error) {
       console.error("[Leaderboard] global leaderboard query failed", error);
     }
-  }, [error, isError, isFetching, isLoading, rows, status]);
+  }, [error, isError, isFetching, isLoading, serverStandings.length, status, selectedRange]);
 
   useEffect(() => {
-    console.log("[Leaderboard] derived profile standings", {
-      selectedRange,
-      selectedRangeIndex,
+    console.log("[Leaderboard] derived standings", {
       loggedInUserId: user?.id ?? null,
       standingsCount: standings.length,
-      standings,
       podium,
       tableRows,
       selectedStanding,
       yourStanding,
     });
-  }, [
-    podium,
-    selectedRange,
-    selectedRangeIndex,
-    selectedStanding,
-    standings,
-    tableRows,
-    user?.id,
-    yourStanding,
-  ]);
+  }, [podium, selectedStanding, standings, tableRows, user?.id, yourStanding]);
 
   return (
     <div className="min-h-[calc(100vh-3.5rem)] overflow-hidden bg-[#fffaf6] text-[#201447]">
@@ -661,74 +661,20 @@ function AnimatedPoints({ value }: { value: number }) {
   );
 }
 
-function buildStandings(rows: LeaderboardEntry[], range: DateRange) {
-  const now = Date.now();
-  const minimumTime = range.days === null ? null : now - range.days * 24 * 60 * 60 * 1000;
-  const filteredRows =
-    minimumTime === null
-      ? rows
-      : rows.filter((row) => new Date(row.created_at).getTime() >= minimumTime);
-
-  const byUser = new Map<
-    string,
-    {
-      userId: string;
-      name: string;
-      avatarConfig: unknown;
-      score: number;
-      bestScore: number;
-      bestGameTitle: string;
-      bestGameSlug: string;
-      submissions: number;
-      lastPlayedAt: string;
-    }
-  >();
-
-  for (const row of filteredRows) {
-    const existing = byUser.get(row.user_id);
-    const displayName = row.username?.trim() || "Anonymous player";
-
-    if (!existing) {
-      byUser.set(row.user_id, {
-        userId: row.user_id,
-        name: displayName,
-        avatarConfig: row.avatar_config,
-        score: row.score,
-        bestScore: row.score,
-        bestGameTitle: row.game_title || "GameHub",
-        bestGameSlug: row.game_slug || "",
-        submissions: 1,
-        lastPlayedAt: row.created_at,
-      });
-      continue;
-    }
-
-    existing.score += row.score;
-    existing.submissions += 1;
-    if (row.score > existing.bestScore) {
-      existing.bestScore = row.score;
-      existing.bestGameTitle = row.game_title || "GameHub";
-      existing.bestGameSlug = row.game_slug || "";
-    }
-    if (new Date(row.created_at) > new Date(existing.lastPlayedAt)) {
-      existing.lastPlayedAt = row.created_at;
-    }
-  }
-
-  return Array.from(byUser.values())
-    .sort((a, b) => b.score - a.score)
-    .map((standing, index) => ({
-      rank: index + 1,
-      userId: standing.userId,
-      name: standing.name,
-      avatarConfig: standing.avatarConfig,
-      score: standing.score,
-      bestGameTitle: standing.bestGameTitle,
-      bestGameSlug: standing.bestGameSlug,
-      submissions: standing.submissions,
-      lastPlayedAt: standing.lastPlayedAt,
-    }));
+function toPlayerStanding(s: LeaderboardStanding, rank: number): PlayerStanding {
+  return {
+    rank,
+    userId: s.user_id,
+    name: s.username?.trim() || "Anonymous player",
+    avatarConfig: s.avatar_config,
+    score: s.total_score,
+    bestGameTitle: s.best_game_title || "GameHub",
+    bestGameSlug: s.best_game_slug || "",
+    submissions: s.submissions,
+    lastPlayedAt: s.last_played_at,
+  };
 }
+
 
 function formatPoints(points: number) {
   return points.toLocaleString("en-US");
