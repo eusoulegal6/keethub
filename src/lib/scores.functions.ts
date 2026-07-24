@@ -94,6 +94,27 @@ export const getGlobalLeaderboard = createServerFn({ method: "GET" })
     return result;
   });
 
+export const getUserScoresByGame = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { data, error } = await context.supabase
+      .from("game_scores")
+      .select("game_id, score, games(slug)")
+      .eq("user_id", context.userId)
+      .order("score", { ascending: false });
+
+    if (error) throw new Error(error.message);
+
+    const bestBySlug: Record<string, number> = {};
+    for (const row of data ?? []) {
+      const slug = (row.games as any)?.slug as string | undefined;
+      if (slug && !(slug in bestBySlug)) {
+        bestBySlug[slug] = row.score;
+      }
+    }
+    return bestBySlug;
+  });
+
 export const getGameLeaderboard = createServerFn({ method: "GET" })
   .inputValidator((input) => z.object({ gameId: z.string().uuid() }).parse(input))
   .handler(async ({ data }) => {

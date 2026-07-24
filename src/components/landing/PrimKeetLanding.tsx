@@ -1,6 +1,7 @@
-﻿import { useEffect, useState } from "react";
+﻿import { useEffect, useMemo, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
 import {
   ArrowRight,
   BarChart3,
@@ -13,9 +14,11 @@ import {
   Menu,
   Mic,
   Music,
+  Palette,
   Puzzle,
   Sparkles,
   Star,
+  Swords,
   Trophy,
   Youtube,
   type LucideIcon,
@@ -25,7 +28,9 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { supabase } from "@/integrations/supabase/client";
-import { getGlobalLeaderboard, type LeaderboardStanding } from "@/lib/scores.functions";
+import { getGlobalLeaderboard, getUserScoresByGame, type LeaderboardStanding } from "@/lib/scores.functions";
+import { listGames, type Game } from "@/lib/games.functions";
+import { LOCAL_GAMES, PORTED_ROUTES } from "@/lib/local-games";
 import { useAuth } from "@/hooks/use-auth";
 import { getAvatarUrlFromProfile } from "@/lib/avatar/url";
 import { cn } from "@/lib/utils";
@@ -45,13 +50,12 @@ type NavItem =
     };
 
 type MiniGame = {
+  slug: string;
   title: string;
-  level: number;
-  progress: number;
+  score: number | null;
   icon: LucideIcon;
   iconClassName: string;
   artClassName: string;
-  progressClassName: string;
 };
 
 type LandingStanding = {
@@ -75,44 +79,33 @@ const navItems: NavItem[] = [
   { label: "Leaderboards", icon: Trophy, to: "/hub/leaderboard" },
 ];
 
-const miniGames: MiniGame[] = [
-  {
-    title: "Word Adventure",
-    level: 12,
-    progress: 70,
-    icon: Languages,
+const LANDING_GAME_THEMES: Record<string, Pick<MiniGame, "icon" | "iconClassName" | "artClassName">> = {
+  semantic: {
+    icon: BookOpen,
     iconClassName: "bg-[#11BFC4] text-white",
     artClassName: "bg-[linear-gradient(135deg,#DDFBFF,#E8FFF3)]",
-    progressClassName: "bg-[linear-gradient(90deg,#4C8DFF,#11BFC4)]",
   },
-  {
-    title: "Speak Up!",
-    level: 8,
-    progress: 60,
-    icon: Mic,
-    iconClassName: "bg-[#8B5CF6] text-white",
-    artClassName: "bg-[linear-gradient(135deg,#FFF3F8,#F7F3FF)]",
-    progressClassName: "bg-[linear-gradient(90deg,#8B5CF6,#4C8DFF)]",
+  "paint-and-guess": {
+    icon: Palette,
+    iconClassName: "bg-[#43A8EA] text-white",
+    artClassName: "bg-[linear-gradient(135deg,#FFF3F8,#EAF6FE)]",
   },
-  {
-    title: "Read & Explore",
-    level: 10,
-    progress: 80,
-    icon: BookOpen,
+  "trivia-blitz": {
+    icon: Star,
+    iconClassName: "bg-[#FF3B8D] text-white",
+    artClassName: "bg-[linear-gradient(135deg,#FFF1F6,#FFF4E8)]",
+  },
+  balderdash: {
+    icon: Puzzle,
+    iconClassName: "bg-[#762A87] text-white",
+    artClassName: "bg-[linear-gradient(135deg,#F7F3FF,#FFF4E8)]",
+  },
+  chess: {
+    icon: Swords,
     iconClassName: "bg-[#FF981F] text-white",
     artClassName: "bg-[linear-gradient(135deg,#F2F8FF,#FFF6D8)]",
-    progressClassName: "bg-[linear-gradient(90deg,#8B5CF6,#11BFC4)]",
   },
-  {
-    title: "Grammar Quest",
-    level: 9,
-    progress: 45,
-    icon: Puzzle,
-    iconClassName: "bg-[#FF3B8D] text-white",
-    artClassName: "bg-[linear-gradient(135deg,#F7F3FF,#FFF4E8)]",
-    progressClassName: "bg-[linear-gradient(90deg,#8B5CF6,#FF3B8D)]",
-  },
-];
+};
 
 const categoryCards = [
   {
@@ -463,6 +456,29 @@ function StudentDashboardPreview({
     ? standings.find((s) => s.user_id === user.id)?.total_score ?? null
     : null;
 
+  const getUserScoresFn = useServerFn(getUserScoresByGame);
+  const { data: userScores } = useQuery({
+    queryKey: ["landing-user-game-scores", user?.id],
+    queryFn: () => getUserScoresFn(),
+    enabled: isAuthenticated && !!user?.id,
+    staleTime: 60_000,
+  });
+
+  const { data: serverGames } = useQuery({
+    queryKey: ["landing-games"],
+    queryFn: () => listGames(),
+    staleTime: 120_000,
+  });
+
+  const games = useMemo(() => {
+    const filtered = (serverGames ?? []).filter((g) => g.is_active);
+    const seen = new Set(filtered.map((g) => g.slug));
+    return [
+      ...filtered,
+      ...LOCAL_GAMES.filter((lg) => !seen.has(lg.slug)).map((lg) => lg.data),
+    ];
+  }, [serverGames]);
+
   if (!isAuthenticated) {
     return (
       <Card className="relative overflow-hidden rounded-lg border-white/80 bg-white/[0.88] p-4 text-[#10204A] shadow-[0_24px_70px_rgba(76,141,255,0.2)] backdrop-blur sm:p-5 lg:p-7">
@@ -537,9 +553,17 @@ function StudentDashboardPreview({
           <div className="rounded-lg bg-white/[0.68] p-3 shadow-[inset_0_0_0_1px_rgba(255,255,255,0.9)] sm:p-4">
             <h3 className="mb-4 text-sm font-black text-[#10204A]">Learning areas</h3>
             <div className="grid grid-cols-2 gap-3 min-[580px]:grid-cols-4">
-              {miniGames.map((game) => (
-                <MiniGameCard key={game.title} game={game} />
-              ))}
+              {games.map((game) => {
+                const theme = LANDING_GAME_THEMES[game.slug];
+                if (!theme) return null;
+                const score = userScores?.[game.slug] ?? null;
+                return (
+                  <MiniGameCard
+                    key={game.slug}
+                    game={{ slug: game.slug, title: game.title, score, ...theme }}
+                  />
+                );
+              })}
             </div>
           </div>
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-1">
@@ -589,40 +613,47 @@ function SummaryTile({
 
 function MiniGameCard({ game }: { game: MiniGame }) {
   const Icon = game.icon;
+  const route = PORTED_ROUTES[game.slug];
 
   return (
     <article className="group overflow-hidden rounded-lg border border-[#E8F0FF] bg-white shadow-[0_12px_28px_rgba(49,64,106,0.1)] transition duration-300 hover:-translate-y-1 hover:shadow-[0_18px_36px_rgba(49,64,106,0.16)]">
-      <div className={cn("relative aspect-[1.18] overflow-hidden p-3", game.artClassName)}>
-        <span
-          className="absolute left-3 top-3 h-3 w-3 rounded-full bg-white/75"
-          aria-hidden="true"
-        />
-        <span
-          className="absolute bottom-4 right-4 h-8 w-8 rounded-lg bg-white/[0.65]"
-          aria-hidden="true"
-        />
-        <div
-          className={cn(
-            "absolute left-1/2 top-1/2 grid h-14 w-14 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full shadow-[0_12px_22px_rgba(49,64,106,0.14)] transition duration-300 group-hover:scale-105",
-            game.iconClassName,
-          )}
-        >
-          <Icon className="h-8 w-8" aria-hidden="true" />
-        </div>
-      </div>
-      <div className="p-3">
-        <h4 className="text-sm font-black leading-tight text-[#10204A]">{game.title}</h4>
-        <div className="mt-3 flex items-center justify-between gap-2 text-[0.68rem] font-bold text-[#667085]">
-          <span>Level {game.level}</span>
-          <span>{game.progress}%</span>
-        </div>
-        <div className="pk-progress mt-1 h-1.5 overflow-hidden rounded-full bg-[#E8EDF6]">
+      <Link
+        to={route ? (route as any) : "/hub/games/$slug"}
+        params={route ? undefined : ({ slug: game.slug } as any)}
+        className="block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#11BFC4]"
+      >
+        <div className={cn("relative aspect-[1.18] overflow-hidden p-3", game.artClassName)}>
           <span
-            className={cn("block h-full rounded-full", game.progressClassName)}
-            style={{ width: `${game.progress}%` }}
+            className="absolute left-3 top-3 h-3 w-3 rounded-full bg-white/75"
+            aria-hidden="true"
           />
+          <span
+            className="absolute bottom-4 right-4 h-8 w-8 rounded-lg bg-white/[0.65]"
+            aria-hidden="true"
+          />
+          <div
+            className={cn(
+              "absolute left-1/2 top-1/2 grid h-14 w-14 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full shadow-[0_12px_22px_rgba(49,64,106,0.14)] transition duration-300 group-hover:scale-105",
+              game.iconClassName,
+            )}
+          >
+            <Icon className="h-8 w-8" aria-hidden="true" />
+          </div>
         </div>
-      </div>
+        <div className="p-3">
+          <h4 className="text-sm font-black leading-tight text-[#10204A]">{game.title}</h4>
+          <div className="mt-3 flex items-center gap-1.5 text-sm font-black text-[#667085]">
+            {game.score != null ? (
+              <>
+                <Star className="h-3.5 w-3.5 fill-[#FFD43B] text-[#FFD43B]" />
+                {game.score.toLocaleString()}
+              </>
+            ) : (
+              <span className="text-xs">Play now</span>
+            )}
+          </div>
+        </div>
+      </Link>
     </article>
   );
 }
@@ -813,7 +844,6 @@ function LeaderboardRow({ row, highlighted }: { row: LandingStanding; highlighte
         </Avatar>
         <div className="min-w-0">
           <p className="truncate text-sm font-black text-[#10204A]">{row.name}</p>
-          <p className="text-xs font-bold text-[#667085]">Level {row.level}</p>
         </div>
       </div>
       <div className="flex items-center justify-end gap-1 text-sm font-black text-[#2F315F]">
