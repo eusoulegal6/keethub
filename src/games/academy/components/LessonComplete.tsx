@@ -1,10 +1,15 @@
+import { useEffect, useRef } from "react";
 import { useNavigate } from "@tanstack/react-router";
-import { Trophy, Target, Clock } from "lucide-react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Trophy } from "lucide-react";
 import { useAcademyStore } from "../store";
 import { getTileById } from "../data/curriculum";
+import { getGameBySlug } from "@/lib/games.functions";
+import { submitScore } from "@/lib/scores.functions";
 
 export function LessonComplete() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const correctCount = useAcademyStore((s) => s.correctCount);
   const attempts = useAcademyStore((s) => s.attempts);
   const activeTileId = useAcademyStore((s) => s.activeTileId);
@@ -13,6 +18,38 @@ export function LessonComplete() {
   const accuracy =
     totalExercises > 0 ? Math.round((correctCount / totalExercises) * 100) : 0;
   const tile = activeTileId ? getTileById(activeTileId) : null;
+
+  const submittedRef = useRef(false);
+
+  const { data: game } = useQuery({
+    queryKey: ["game-by-slug", "academy"],
+    queryFn: () => getGameBySlug({ data: { slug: "academy" } }),
+    staleTime: Infinity,
+  });
+
+  const submitScoreFn = useMutation({ mutationFn: submitScore });
+
+  useEffect(() => {
+    if (!game || submittedRef.current) return;
+    submittedRef.current = true;
+
+    submitScoreFn.mutateAsync({
+      data: {
+        gameId: game.id,
+        score: correctCount,
+        metadata: {
+          accuracy,
+          correctCount,
+          totalExercises,
+          tileId: activeTileId,
+          tileTitle: tile?.title ?? null,
+        },
+      },
+    }).then(() => {
+      queryClient.invalidateQueries({ queryKey: ["global-leaderboard"] });
+      queryClient.invalidateQueries({ queryKey: ["game-leaderboard", game.id] });
+    });
+  }, [game]);
 
   const handleReturn = () => {
     returnToPath();
