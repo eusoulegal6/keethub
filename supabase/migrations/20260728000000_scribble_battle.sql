@@ -316,7 +316,7 @@ CREATE OR REPLACE FUNCTION public.set_sb_player_ready(
   room_id UUID,
   is_ready BOOLEAN
 )
-RETURNS JSONB LANGUAGE plpgsql AS $$
+RETURNS JSONB LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
 BEGIN
   UPDATE public.scribble_battle_players
   SET is_ready = set_sb_player_ready.is_ready
@@ -331,7 +331,7 @@ CREATE OR REPLACE FUNCTION public.switch_sb_team(
   room_id UUID,
   new_team INT
 )
-RETURNS JSONB LANGUAGE plpgsql AS $$
+RETURNS JSONB LANGUAGE plpgsql SECURITY DEFINER SET search_path = public AS $$
 DECLARE
   room_row public.scribble_battle_rooms%ROWTYPE;
 BEGIN

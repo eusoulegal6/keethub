@@ -774,15 +774,18 @@ export function GameProvider({ children }: { children: ReactNode }) {
 
   const switchTeam = useCallback(
     async (team: 1 | 2) => {
-      if (!gameState.roomId || !channelRef.current) return;
+      if (!gameState.roomId || !channelRef.current) {
+        toast.error("Not connected to room");
+        return;
+      }
 
-      const { error } = await supabase.rpc("switch_sb_team", {
+      const { data, error } = await supabase.rpc("switch_sb_team", {
         room_id: gameState.roomId,
         new_team: team,
       });
 
-      if (error) {
-        toast.error("Failed to switch team");
+      if (error || !(data as any)?.success) {
+        toast.error((data as any)?.error || "Failed to switch team");
         return;
       }
 
