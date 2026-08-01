@@ -156,6 +156,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
     void (async () => {
       const { data } = await supabase.auth.getUser();
       if (cancelled || !data.user?.id) return;
+      console.log("[SB:provider] mount authUserId =", data.user.id);
       setGameState((prev) => ({
         ...prev,
         authUserId: prev.authUserId || data.user!.id,
@@ -632,6 +633,16 @@ export function GameProvider({ children }: { children: ReactNode }) {
         : activePhase !== "lobby"
           ? Date.now() + state.room.roundTime * 1000
           : null;
+
+      console.log("[SB:joinRoom] state from RPC:", {
+        serverOwnerId: state.room.ownerId,
+        serverOwnerIdType: typeof state.room.ownerId,
+        userId,
+        userIdType: typeof userId,
+        prevAuthUserId: gameState.authUserId,
+        prevOwnerId: gameState.ownerId,
+        allRoomKeys: Object.keys(state.room),
+      });
 
       setGameState((prev) => ({
         ...prev,

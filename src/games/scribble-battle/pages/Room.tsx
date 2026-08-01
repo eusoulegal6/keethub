@@ -117,6 +117,20 @@ function Room({ onBack }: { onBack: () => void }) {
     startGame();
   };
   const isHost = gameState.ownerId !== null && gameState.ownerId === gameState.authUserId;
+
+  // Debug: log why Start Game button isn't appearing
+  useEffect(() => {
+    console.log("[SB:Room] isHost check:", {
+      isHost,
+      ownerId: gameState.ownerId,
+      authUserId: gameState.authUserId,
+      ownerIdType: typeof gameState.ownerId,
+      authUserIdType: typeof gameState.authUserId,
+      phase: gameState.phase,
+      team1Count: gameState.team1.length,
+      team2Count: gameState.team2.length,
+    });
+  }, [isHost, gameState.ownerId, gameState.authUserId, gameState.phase, gameState.team1.length, gameState.team2.length]);
   const currentPlayer = [...gameState.team1, ...gameState.team2].find(
     (p) => p.id === gameState.selfId,
   );
