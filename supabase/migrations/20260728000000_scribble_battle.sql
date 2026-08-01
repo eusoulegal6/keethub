@@ -394,8 +394,8 @@ BEGIN
   SELECT * INTO t2_drawer FROM public.scribble_battle_players
   WHERE room_id = p_room_id AND team = 2 ORDER BY random() LIMIT 1;
 
-  -- Reset guess state and win streaks
-  UPDATE public.scribble_battle_players SET has_guessed = false, win_streak = 0
+  -- Reset guess state, win streaks, and ready state (handles rematch)
+  UPDATE public.scribble_battle_players SET has_guessed = false, win_streak = 0, is_ready = false
   WHERE room_id = p_room_id;
 
   -- Store secret

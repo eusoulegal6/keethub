@@ -150,8 +150,19 @@ export function GameProvider({ children }: { children: ReactNode }) {
   const roomIdRef = useRef<string | null>(null);
   const phaseRef = useRef<SBPhase>("lobby");
 
+  // Fetch auth user on mount so authUserId is always available
   useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      const { data } = await supabase.auth.getUser();
+      if (cancelled || !data.user?.id) return;
+      setGameState((prev) => ({
+        ...prev,
+        authUserId: prev.authUserId || data.user!.id,
+      }));
+    })();
     return () => {
+      cancelled = true;
       if (timerRef.current) clearInterval(timerRef.current);
       channelRef.current?.unsubscribe();
     };
@@ -273,7 +284,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
           team2Score: payload.team2Score ?? prev.team2Score,
         }));
         fetchRoomPlayers(roomId);
-        window.dispatchEvent(new CustomEvent("sb-round-started"));
+        window.dispatchEvent(new CustomEvent("round-started"));
       });
 
       sbChan.subscribe("round-ended", (payload: any) => {
@@ -304,7 +315,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
             winningTeam: payload.winningTeam ?? null,
           },
         }));
-        window.dispatchEvent(new CustomEvent("sb-round-ended"));
+        window.dispatchEvent(new CustomEvent("round-ended"));
       });
 
       sbChan.subscribe("final-round-update", (payload: any) => {
@@ -387,13 +398,13 @@ export function GameProvider({ children }: { children: ReactNode }) {
 
       sbChan.subscribe("drawing:path-start", () => {});
       sbChan.subscribe("drawing:path-update", (payload: any) => {
-        window.dispatchEvent(new CustomEvent("sb-drawing-event", { detail: payload }));
+        window.dispatchEvent(new CustomEvent("drawing-event", { detail: payload }));
       });
       sbChan.subscribe("drawing:path-complete", (payload: any) => {
-        window.dispatchEvent(new CustomEvent("sb-drawing-event", { detail: payload }));
+        window.dispatchEvent(new CustomEvent("drawing-event", { detail: payload }));
       });
       sbChan.subscribe("canvas-cleared", () => {
-        window.dispatchEvent(new CustomEvent("sb-canvas-cleared"));
+        window.dispatchEvent(new CustomEvent("canvas-cleared"));
       });
 
       return sbChan;
@@ -523,10 +534,9 @@ export function GameProvider({ children }: { children: ReactNode }) {
         },
       }));
       fetchRoomPlayers(roomId);
-      window.dispatchEvent(new CustomEvent("sb-round-started"));
+      window.dispatchEvent(new CustomEvent("round-started"));
       channelRef.current.broadcast("round-started", result);
       channelRef.current.broadcast("canvas-cleared", {});
-      window.dispatchEvent(new CustomEvent("sb-canvas-cleared"));
 
       await new Promise((r) => setTimeout(r, 3000));
     } else if (phase === "final") {

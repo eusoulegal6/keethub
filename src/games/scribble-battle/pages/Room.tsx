@@ -100,6 +100,15 @@ function Room({ onBack }: { onBack: () => void }) {
     startGame();
   };
 
+  // Clear score-submission guard only after a new game actually starts,
+  // not before the RPC call — if startGame fails (e.g. non-host clicks
+  // "Play Again"), the guard must stay in place to prevent duplicate scores.
+  useEffect(() => {
+    if (gameState.phase !== "game-ended") {
+      submittedRoomRef.current = null;
+    }
+  }, [gameState.phase]);
+
   const handleRematch = () => {
     if (gameState.team1.length < 2 || gameState.team2.length < 2) {
       toast.error("Each team needs at least 2 players");
@@ -107,7 +116,6 @@ function Room({ onBack }: { onBack: () => void }) {
     }
     startGame();
   };
-
   const isHost = gameState.ownerId !== null && gameState.ownerId === gameState.authUserId;
   const currentPlayer = [...gameState.team1, ...gameState.team2].find(
     (p) => p.id === gameState.selfId,
