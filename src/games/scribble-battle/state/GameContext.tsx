@@ -784,8 +784,15 @@ export function GameProvider({ children }: { children: ReactNode }) {
         new_team: team,
       });
 
-      if (error || !(data as any)?.success) {
-        toast.error((data as any)?.error || "Failed to switch team");
+      if (error) {
+        console.error("switch_sb_team RPC error:", error);
+        toast.error(`Switch failed: ${error.message || "Unknown error"}`);
+        return;
+      }
+
+      const result = data as any;
+      if (!result?.success) {
+        toast.error(result?.error || "Failed to switch team");
         return;
       }
 
